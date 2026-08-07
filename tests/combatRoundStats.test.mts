@@ -258,9 +258,17 @@ test('rounds are counted for pets and mobs too, with the same rules and no "take
 const WINDOWS = ['w49-round-triple-backstab.log', 'w50-round-fanout.log', 'w51-round-flurry-era.log'] as const
 
 /** Frozen outgoing/incoming totals for each window. The fixtures are COMMITTED, so these can
- *  only change if the model changed — which is precisely what they are here to catch. */
+ *  only change if the model changed — which is precisely what they are here to catch.
+ *
+ *  w49's incoming was 3434 until the DoT battery learned the SECOND-PERSON conjugation
+ *  ("You have taken N damage from <Spell> by <caster>." — see DOT_RE in parseCombat.ts). This
+ *  gate caught that change, which is its whole job; the delta is +20 and it is fully accounted
+ *  for: `grep -c 'have taken' w49-round-triple-backstab.log` = 1, that one line being
+ *  `[17:55:25] You have taken 20 damage from Negation of Life by a Knight of Innoruuk.`, and
+ *  3434 + 20 = 3454. Outgoing did not move in any window, and w50/w51 —
+ *  which contain no second-person DoT tick at all — did not move on either dimension. */
 const TOTALS: Record<string, { out: number; in: number }> = {
-  'w49-round-triple-backstab.log': { out: 9554, in: 3434 },
+  'w49-round-triple-backstab.log': { out: 9554, in: 3454 },
   'w50-round-fanout.log': { out: 12249, in: 3899 },
   'w51-round-flurry-era.log': { out: 15093, in: 4171 }
 }

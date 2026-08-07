@@ -1,7 +1,8 @@
-import { type JSX, useCallback, useEffect, useState } from 'react'
+import { type JSX, useCallback, useEffect, useMemo, useState } from 'react'
 import { Alert, Box, Button, Chip, Snackbar, Stack, Tab, Tabs, Typography } from '@mui/material'
 import type { CountSource } from '@shared/types'
 import { useProgress, type QuestProgress } from './useProgress'
+import RewardCompletionOffer from './RewardCompletionOffer'
 // The `/outputfile` freshness line (JOS-44), wired to the registry: this tab's have/need chips
 // read the same dump the Exaltations tab does, so they get the same one-line treatment — the
 // command, one clause of why, and the FILE's own age (or "not yet run").
@@ -77,11 +78,14 @@ function CountsLine({
   questCount,
   totalQuests,
   filteredCount,
+  completedCount,
   countSource
 }: {
   questCount: number
   totalQuests: number
   filteredCount: number
+  /** how many of the VISIBLE quests are marked complete — the tab's overall progress */
+  completedCount: number
   countSource: CountSource
 }): JSX.Element {
   if (questCount === 0) {
@@ -99,12 +103,38 @@ function CountsLine({
       </Typography>
     )
   }
+  const pct = totalQuests > 0 ? Math.round((completedCount / totalQuests) * 100) : 0
   return (
-    <Typography variant="body2" color="text.secondary">
-      {filteredCount} of {totalQuests} quests · counting from{' '}
+    <Typography variant="body2" color="text.secondary" data-testid="posky-counts-line">
+      {filteredCount} of {totalQuests} quests ·{' '}
+      {/* OVERALL COMPLETION. The denominator is the VISIBLE set, not the scrape's 95, for the
+          same reason every other number on this line is: an ignored quest is out of the counts
+          by the user's own instruction, so including it here would report progress against work
+          he has said he is not doing. */}
+      <Box component="span" sx={{ color: 'success.main', fontWeight: 600 }}>
+        {completedCount} of {totalQuests} complete ({pct}%)
+      </Box>{' '}
+      · counting from{' '}
       {countSource === 'log' ? 'looted log' : countSource === 'inventory' ? 'inventory export' : 'log + inventory'}
     </Typography>
   )
+}
+
+/**
+ * The three things every count on this tab is measured against, derived once from the VISIBLE
+ * quests. Ignored quests are excluded from all of them by the same rule the counts line states:
+ * the user said he is not doing those, so neither the totals nor the reward offer may mention them.
+ */
+function visibleStats(visible: readonly QuestProgress[]): {
+  total: number
+  completed: number
+  keys: Set<string>
+} {
+  return {
+    total: visible.length,
+    completed: visible.filter((q) => q.completed).length,
+    keys: new Set(visible.map((q) => q.key))
+  }
 }
 
 /** The quest a deep link asked us to open, and the nonce that re-delivers the same ask twice. */
@@ -236,10 +266,12 @@ export default function PoskyView({
   const {
     quests,
     classes,
+    progress,
     countSource,
     setCountSource,
     reloadInventory,
     setQuestComplete,
+    setQuestsComplete,
     sharedItems,
     ambiguousQuestNames
   } = useProgress({ onQuestComplete })
@@ -253,8 +285,7 @@ export default function PoskyView({
 
   const onReload = async (): Promise<void> => setToast(await reloadInventory())
 
-  // Counts describe the list you are looking at, so ignored quests are not in them.
-  const totalQuests = list.visible.length
+  const stats = useMemo(() => visibleStats(list.visible), [list.visible])
 
   return (
     <Stack spacing={2} sx={{ height: '100%', position: 'relative' }}>
@@ -284,10 +315,18 @@ export default function PoskyView({
           {countSource !== 'log' && (
             <OutputKindLine kind="inventory" testId="posky-inventory-fresh" />
           )}
+          {/* Renders nothing unless the dump proves a quest is done that nothing has marked. */}
+          <RewardCompletionOffer
+            progress={progress}
+            visibleKeys={stats.keys}
+            setQuestsComplete={setQuestsComplete}
+            onToast={setToast}
+          />
           <CountsLine
             questCount={quests.length}
-            totalQuests={totalQuests}
+            totalQuests={stats.total}
             filteredCount={list.filtered.length}
+            completedCount={stats.completed}
             countSource={countSource}
           />
           <QuestList

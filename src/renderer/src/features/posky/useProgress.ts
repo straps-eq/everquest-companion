@@ -162,6 +162,8 @@ export interface UseProgress {
   setCountSource: (s: CountSource) => void
   reloadInventory: () => Promise<string>
   setQuestComplete: (key: string, complete: boolean) => Promise<void>
+  /** Bulk completion for the held-reward confirm — one state write for N keys. */
+  setQuestsComplete: (keys: readonly string[], complete: boolean) => Promise<void>
   inventoryInfo: ProgressState['inventorySource']
   /** questKey → contested items (other quests sharing each required item). */
   sharedItems: SharedItemsMap
@@ -180,6 +182,31 @@ export interface UseProgressOptions {
    * here, so it never celebrates.
    */
   onQuestComplete?: (quest: PoskyQuest) => void
+}
+
+/**
+ * Complete MANY quests in one gesture — the held-reward confirm (rewardCompletion.ts), which can
+ * legitimately carry seventy keys at once for a player whose Sky work predates this app. Same
+ * shape as the live turn-in path in useProgress: N invokes, ONE state write at the end, so the
+ * list re-renders once rather than once per key.
+ *
+ * Fanning out is safe even at seventy. The main-side handler is fully SYNCHRONOUS (getProgress →
+ * mutate a Set → setProgress), so each invoke runs to completion before the next is serviced:
+ * there is no read-modify-write window for these to interleave in, and no completion can be lost
+ * to a last-write-wins race.
+ *
+ * Manual completion never celebrates (see UseProgressOptions), which is exactly why this rides
+ * the checkbox's path and not the turn-in detector's — confirming seventy quests must not fire
+ * seventy toasts and a confetti burst.
+ */
+async function completeMany(
+  keys: readonly string[],
+  complete: boolean,
+  setProgress: (p: ProgressState) => void
+): Promise<void> {
+  if (keys.length === 0) return
+  const results = await Promise.all(keys.map((k) => window.eq.setQuestComplete(k, complete)))
+  setProgress(results[results.length - 1])
 }
 
 export function useProgress(opts?: UseProgressOptions): UseProgress {
@@ -272,6 +299,8 @@ export function useProgress(opts?: UseProgressOptions): UseProgress {
     setProgress(next)
   }, [])
 
+  const setQuestsComplete = useCallback((k: readonly string[], c: boolean) => completeMany(k, c, setProgress), [])
+
   // Counts + display names derived from the log (everything still HELD from looting).
   // The disposition → held-vs-gone rule lives in computeHeldCounts (heldCounts.ts, the ONE
   // place counts derive — Tasks #40/#47): sold and combined rows are excluded, everything
@@ -320,6 +349,7 @@ export function useProgress(opts?: UseProgressOptions): UseProgress {
     setCountSource,
     reloadInventory,
     setQuestComplete,
+    setQuestsComplete,
     inventoryInfo: progress?.inventorySource,
     sharedItems: sharedItemsMap,
     ambiguousQuestNames: ambiguousNames
