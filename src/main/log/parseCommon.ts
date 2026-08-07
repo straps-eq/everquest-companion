@@ -92,5 +92,6 @@ export function cleanMob(s?: string): string | undefined {
 
 /** True if a line looks like damage but we couldn't classify it (for the miss log). */
 export function looksDamage(text: string): boolean {
-  return /\bfor \d+ points? of|\bhas taken \d+ damage/.test(text)
+  // `ha(?:s|ve)` matches the parser's DoT battery: a tick on the player reads "You have taken".
+  return /\bfor \d+ points? of|\bha(?:s|ve) taken \d+ damage/.test(text)
 }

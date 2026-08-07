@@ -25,9 +25,19 @@ const DS_RE = /^(.+?) is \w+ by (YOUR|.+?'s) (.+?) for (\d+) points? of non-mele
 const DS_INC_RE = /^YOU are \w+ by (.+?)'s (.+?) for (\d+) points? of non-melee damage!$/
 // DoT with a caster: "<B> has taken N damage from your <Spell>." | "… from <Spell> by <caster>."
 // An optional trailing " (Critical)" (or other) modifier may follow the period.
-const DOT_RE = /^(.+?) has taken (\d+) damage from (.+?)\.(?: \((.+?)\))?$/
+//
+// `ha(?:s|ve)` IS LOAD-BEARING, NOT TIDINESS. A DoT ticking on the PLAYER conjugates in the
+// second person — "You have taken 153 damage from Plague by Master Yael." — and the old
+// `has taken` anchor (plus the `includes('has taken')` gate in classifyDamage) rejected every
+// one of them, so incoming DoT damage never reached the model at all: the mob's ticks on a
+// third party counted, the player's own did not. Measured on a 7-minute Master Yael fight
+// (2026-08-07): 20 dropped ticks × 153 = 3,060 points of damage missing from damage-taken,
+// against 96 counted melee hits — a quarter of the incoming total, invisible. Same class of
+// second-person grammar fix as DS_INC_RE above; the capture order is identical here, so the
+// two conjugations share one regex rather than splitting into a near-duplicate.
+const DOT_RE = /^(.+?) ha(?:s|ve) taken (\d+) damage from (.+?)\.(?: \((.+?)\))?$/
 // Caster-less DoT (someone else's): "<B> has taken N damage by <Spell>." → attacker:null.
-const DOT_NOCASTER_RE = /^(.+?) has taken (\d+) damage by (.+?)\.(?: \((.+?)\))?$/
+const DOT_NOCASTER_RE = /^(.+?) ha(?:s|ve) taken (\d+) damage by (.+?)\.(?: \((.+?)\))?$/
 
 // ----- heal (NEW): "<healer> healed <target> for N hit points[ by <spell>]." -----
 // Two shapes in the real log:
@@ -390,7 +400,7 @@ function pointsDamage(c: ClassifyCtx): LogEvent | null {
   return null
 }
 
-/** The "has taken N damage" half of the damage battery: DoTs, with and without a caster. */
+/** The "ha(s|ve) taken N damage" half of the damage battery: DoTs, with and without a caster. */
 function takenDamage({ text, ts, seq, raw }: ClassifyCtx): LogEvent | null {
   // DoT with a caster: "<B> has taken N damage from your <Spell>." | "… from <Spell> by <caster>."
   let m = DOT_RE.exec(text)
@@ -438,7 +448,8 @@ function takenDamage({ text, ts, seq, raw }: ClassifyCtx): LogEvent | null {
 export function classifyDamage(c: ClassifyCtx): LogEvent | null {
   const { text } = c
   const hasPoints = text.includes('points of') || text.includes('point of')
-  const hasTaken = text.includes('has taken')
+  // Both conjugations: a DoT on a third party says "has taken", one on the player "have taken".
+  const hasTaken = text.includes('has taken') || text.includes('have taken')
   if (hasPoints) {
     const ev = pointsDamage(c)
     if (ev) return ev
