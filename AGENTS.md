@@ -1541,6 +1541,69 @@ failure. Reuses the tier-2 lifecycle via `scripts/sandbox/sandbox-lifecycle.ps1`
   and nothing ever sums them. From-marking-onward: counters carry no id, so rows
   aggregated before a marking keep their cohort and the digest says so.
 
+## FORK-LOCAL NOTES (straps-eq — drop this whole section when merging upstream)
+
+This checkout is the **straps-eq fork** (`origin`), with `jmoyers/everquest-companion`
+as `upstream`. Everything in this section is about THIS machine and THIS fork; none
+of it is upstream's concern, and it is kept in one block so it is trivially droppable.
+
+- **THE BOARD ABOVE IS NOT REACHABLE FROM HERE.** The Linear kanban is in the
+  upstream owner's personal workspace and `scripts/linear.mts` needs
+  `.triage/linear.env`, which this fork does not have. Ignore the SYNC/ticket
+  loop and the `linear-board` skill; keep the parts that transfer — waves,
+  fixture-first, path-scoped commits, merge-not-cherry-pick, the full gauntlet
+  before every merge.
+- **`ELECTRON_RUN_AS_NODE=1` IS SET IN THIS ENVIRONMENT AND IT BREAKS `npm run dev`.**
+  The IDE's own Electron host exports it, and every terminal spawned from the IDE
+  inherits it. With it set, the `electron` binary runs as plain Node, so
+  `require('electron')` returns a PATH STRING and the app dies at
+  `channel.ts` with `Cannot read properties of undefined (reading 'isPackaged')`.
+  It is not a repo bug and nothing in the tree should be changed to accommodate it.
+  From an IDE terminal, prefix every launch:
+  `Remove-Item Env:ELECTRON_RUN_AS_NODE -ErrorAction SilentlyContinue; npm run dev`
+  A plain PowerShell window opened outside the IDE does not need it. The same
+  applies to `npm run test:e2e`, which launches Electron the same way.
+- **TWO E2E SPECS FAIL ON THIS MACHINE, ON UNMODIFIED MAIN.** `whats-new` and
+  `maps`, and the cause is display scaling: this display runs at **122%**, so
+  `devicePixelRatio` is 1.22 and both specs assume an integer one — whats-new
+  asserts exact window heights (`innerHeight=1002` where 1000 is expected, 621
+  for 620, 902 for 900) and maps asserts `canvas buffer === css × dpr` with no
+  tolerance for the rounding (`739 × 1.22 = 901.58 → 902`). Baseline is therefore
+  **16/18**, and a merge is "green" at 16/18 here. VERIFY THE BASELINE ON MAIN
+  before blaming a change for either of them.
+- **`overview.e2e.mts` flakes under parallel load** — a live-vs-last-fight race
+  ("overview `Current fight (live)` · selector `Last fight — …`"). Seen once in a
+  4-way parallel run, then 3/3 green in isolation and green on every re-run. Not
+  a regression signal on its own; re-run it alone before believing it.
+- **`npm install` rewrites package-lock.json** on this npm (11.8.0) by dropping
+  `libc` fields from optional deps — 42 deletions, unrelated to any change.
+  `git restore package-lock.json` before staging, and never let it ride along.
+  Same for `tsconfig.*.tsbuildinfo`, which are TRACKED and are rewritten by every
+  `npm run typecheck`.
+- **`tests/defaultSoundPack.test.mts` can flake under full-suite parallel load**
+  (once, at 9.2s; the test does no network). Passes in isolation and on re-run.
+- **This fork's character is `Straps@freeport`** (also `Straps@neriak`), a
+  Monk/Paladin/Enchanter loadout — so unlike the owner's log, this one prints
+  `You smite` (PAL), `You mend your wounds…` (MNK) and a charmed pet's
+  `Sorry, Master... calming down.` (ENC). It is the only log in either repo that
+  can settle the **MNK discipline dispute** (classes.json states 10 with levels;
+  the wiki's Disciplines page strikes the whole non-Rogue table, and
+  `procAnalytics.ts` leaves `disc` deliberately absent because the owner's
+  1.3M-line log only ever printed the Rogue poison grant list). If this log ever
+  prints a discipline activation, that is new evidence and a new state dimension.
+- **Sky completion from held rewards is LIVE here** (`rewardCompletion.ts`): this
+  character had 71 Sky rewards in bank/keyring and zero recorded completions, and
+  confirmed 62 of them (the NO DROP set). The 9 `tradeable` ones stay unticked and
+  therefore stay OFFERED — the banner keeps proposing them until they are
+  confirmed or the quests are ignored. That is correct but nags; a dismiss is the
+  obvious follow-up if it becomes annoying.
+- **`countSource` is ONE global preference with TWO controls** (`eq.countSource`
+  in localStorage, read by `useProgress`, surfaced in both the Sky tab's "Count
+  items from" and the Loot tab's "Count from"). Setting either sets both. It
+  still DEFAULTS to `'log'`, which is why a returning player sees zero progress
+  until he changes it — flipping that default (or prompting once when a dump
+  exists but the source is `log`) is an open, unmade improvement.
+
 ## Known open items
 
 - **TOOLCHAIN WAVE — LANDED** (was: security, owner-flagged 2026-08-04;
