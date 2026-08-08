@@ -22,6 +22,7 @@ import {
 import { idKey } from '../log/parser'
 import { SEC_RINGS, type EngineFoldProbe } from './foldProbe'
 import { StateTimeline } from './stateTimeline'
+import { StanceLedger } from './stanceLedger'
 import { CharmModel } from './charmModel'
 import { SpecialAttacks } from './specialAttacks'
 import type { RecentCasts } from './procDetect'
@@ -196,6 +197,14 @@ export class EngineState {
    */
   specials = new SpecialAttacks()
   /**
+   * WHAT EACH MOB HITS YOU WITH, PER STANCE (stanceLedger.ts) — the measurement behind the
+   * stance recommendation. SESSION-level and purely ADDITIVE, exactly like `stateTimeline`: it
+   * is a second index over incoming damage the meter has already counted, so no damage total
+   * moves (law 8's tripwire). Written by the incoming branch of the ingest fold, cleared by
+   * reset() and by the epoch boundary (the beta character's fights are not this one's).
+   */
+  stanceLedger = new StanceLedger()
+  /**
    * THE ENGINE'S OWN ATTRIBUTION SEAM (JOS-59, foldProbe.ts). Undefined on every boot and in
    * every test; installed only by `CombatEngine.attachFoldProbe`, which only the bench calls.
    * Read as `const p = this.probe; if (p) …` on the hot paths — one field read and one branch.
@@ -252,6 +261,7 @@ export class EngineState {
     this.coatCombat = []
     this.slowSamples = []
     this.stateTimeline.reset()
+    this.stanceLedger.reset()
     this.recentCasts.clear()
     this.quickBuffTs = 0
     this.specials.reset()

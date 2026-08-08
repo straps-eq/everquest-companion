@@ -67,6 +67,7 @@ import { searchFights } from './fightSearch'
 import { ACTIVE_MS, SLOW_SAMPLE_CAP } from './encounter'
 import type { LogEvent } from '../../shared/logEvents'
 import type { RosterSnap, RosterView } from '../../shared/roster'
+import type { TargetProfile } from '../../shared/stanceAdvice'
 import type {
   BladeCoatState,
   CombatSnapshot,
@@ -182,6 +183,26 @@ export class CombatEngine {
    */
   setPlayerName(name: string): void {
     this.st.setPlayerName(name)
+  }
+
+  /**
+   * THE STANCE LEDGER'S READ MODEL (stanceLedger.ts) — every (mob, zone, tier) that has hit
+   * you this session, with its damage split by the stance you were wearing.
+   *
+   * Its OWN door rather than a `CombatSnapshot` field, deliberately. That snapshot is polled
+   * once a second by the Combat tab and by every open meter overlay; this list is read by one
+   * panel, on demand, and it grows with the bestiary rather than with the payload caps the
+   * snapshot is built around. Advice is also not a meter reading — nothing here belongs in the
+   * per-tick hot path.
+   */
+  stanceTargets(): TargetProfile[] {
+    return this.st.stanceLedger.targets()
+  }
+
+  /** The stance in effect right now, lowercase, or null if none has been committed this
+   *  session. Lowercase because that is the key `STANCE_EFFECTS` and `detectMismatch` want. */
+  currentStanceKey(): string | null {
+    return this.st.stance ? this.st.stance.name.toLowerCase() : null
   }
 
   /**

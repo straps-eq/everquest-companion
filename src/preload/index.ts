@@ -37,6 +37,9 @@ import type {
   VoicePrefs
 } from '../shared/types'
 import type { CombatSnapshot, FightSearchResult, SnapshotOpts } from '../shared/combat'
+// The stance advisor's wire shape (shared/stanceAdvice.ts) — measurements + the worn stance +
+// the wearable stances, in one payload because every consumer joins all three.
+import type { StanceAdvicePayload } from '../shared/stanceAdvice'
 import type { ClassAbbr, ComboDelta, ComboSnap } from '../shared/classCombo'
 // "What's new at this level" (docs/plans/levelup-whats-new.md) — the unlock dataset rides the
 // spell-catalog channel with a flag; see the handler in src/main/ipc/knowledge.ts.
@@ -307,6 +310,13 @@ const api = {
    *  empty/whitespace query resolves to no hits (the UI shows its browse list instead). */
   searchFights: (text: string, limit?: number): Promise<FightSearchResult> =>
     ipcRenderer.invoke(IPC.searchFights, text, limit),
+  /**
+   * The stance advisor's ONE read: measured per-(mob, zone, tier) incoming profiles, the stance
+   * worn right now, and the stances this class loadout can wear — together, because every
+   * consumer joins them (shared/stanceAdvice.ts `adviseFor` / `detectMismatch`). On demand, not
+   * polled: this is not a meter reading.
+   */
+  getStanceAdvice: (): Promise<StanceAdvicePayload> => ipcRenderer.invoke(IPC.getStanceAdvice),
 
   // ---- alerts extension (Task #18) ----
   listAlerts: (): Promise<AlertDef[]> => ipcRenderer.invoke(IPC.listAlerts),

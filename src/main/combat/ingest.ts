@@ -195,6 +195,12 @@ function ingestWorld(st: EngineState, ev: LogEvent): boolean {
       // Punch" was said to the PREVIOUS character. The lanes fall back to the parser's generic
       // names until this character's own state line says otherwise (never a carried-over guess).
       st.specials.reset()
+      // …and the stance ledger goes with them. Its rows say "this mob hits ME this way", where
+      // "me" is a set of resists, an AC and a class loadout that the rebirth replaced wholesale.
+      // Carrying the beta character's measurements forward would advise THIS character from
+      // another one's damage, so the ledger is CLEARED rather than censored — unlike a span,
+      // a damage sum has no honest truncated form.
+      st.stanceLedger.reset()
       return true
     }
     case 'zone': {
@@ -375,6 +381,36 @@ function foldHealAnalytics(st: EngineState, ev: HealEvent): void {
   if (p) p.leave()
 }
 
+/**
+ * WHAT THIS MOB IS DOING TO YOU, filed under the stance you are wearing (stanceLedger.ts).
+ *
+ * Gated on `at.kind === 'incoming'`, which is the SAME verdict `route()` just acted on — so the
+ * ledger's admission set is exactly `Agg.addInc`'s, hit for hit and point for point, and the two
+ * can never drift into disagreeing about what hit the player. (That identity is what
+ * tests/stanceLedger.test.mts asserts against a real fixture: Σ ledger == the engine's own
+ * incoming total.) Purely additive: a second index over damage already counted, moving no total.
+ *
+ * The ATTACKER'S RAW NAME goes in, not `world.label()`: the label carries the spawn-generation
+ * ` (N)` suffix, which is display flavor and never identity (law 2), and pooling "a fetid fiend"
+ * with "a fetid fiend (14)" as two different mobs would shred every profile in the zone.
+ *
+ * The stance is read off `EngineState`, which owns it — never re-parsed here.
+ */
+function foldStanceLedger(st: EngineState, ev: DamageEvent, at: Attribution): void {
+  if (at.kind !== 'incoming') return
+  const p = st.probe
+  if (p) p.enter(SEC_ANALYTICS)
+  st.stanceLedger.note({
+    mobName: ev.attacker,
+    zone: st.zone,
+    stance: st.stance?.name,
+    dtype: ev.dtype,
+    amount: ev.amount,
+    ts: ev.ts
+  })
+  if (p) p.leave()
+}
+
 /** YOUR avoided swing. It is still a swing ATTEMPT, and the mechanical proc denominator is
  *  attempts — a proc that cannot fire on a miss still had the chance to. */
 function foldMissAnalytics(st: EngineState, ev: MissEvent): void {
@@ -429,6 +465,7 @@ function ingestDamage(st: EngineState, ev: DamageEventE): void {
   if (at === null) return
   const delta = st.current === encBefore ? (st.current?.activeMs ?? 0) - activeBefore : 0
   foldDamageAnalytics(st, dmgEv, delta, at)
+  foldStanceLedger(st, dmgEv, at)
 }
 
 /** damage / heal / mitigation / miss / resist. Returns true if consumed. */

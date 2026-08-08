@@ -152,6 +152,38 @@ export interface StanceMismatch {
   gain: number
 }
 
+/**
+ * THE WIRE SHAPE — what `IPC.getStanceAdvice` ('combat:stanceAdvice') answers with.
+ *
+ * All three fields in ONE payload because all three are inputs to the SAME arithmetic and must
+ * describe one instant: `adviseFor(target, availableStances)` and
+ * `detectMismatch(target, availableStances, currentStance)` each take two of them, and a
+ * ranking built from targets read at t against a loadout read at t+1 describes a character who
+ * existed at neither. It is the same argument the group roster rides the combat snapshot on.
+ *
+ * Everything here is DERIVED, and each field carries its own honesty:
+ *   * `targets` are measurements — what the log printed, un-corrected (the un-mitigation happens
+ *     in `pooledProfile`, on the way to advice, never in the ledger).
+ *   * `currentStance` is null when the log has never printed a stance commit this session. That
+ *     is not "no stance"; it is "we were not told", and `detectMismatch` refuses on it rather
+ *     than assuming Balanced.
+ *   * `availableStances` comes from the INFERRED class combo, so it deliberately over-offers
+ *     while the loadout is unresolved (main/data/stanceLoadout.ts has the reasoning). A surface
+ *     that presents it as fact is misreading it — label it with the combo's own confidence.
+ */
+export interface StanceAdvicePayload {
+  /** every (mob, zone, tier) that has hit you this session, most-recently-hit first */
+  targets: TargetProfile[]
+  /** lowercase stance key currently worn, or null when none was ever committed */
+  currentStance: string | null
+  /**
+   * lowercase stance keys the class loadout can wear, sorted. An UNRESOLVED combo widens this
+   * (every candidate class contributes its stances); it is empty only when the combo module has
+   * produced no interval at all, i.e. nothing has been observed yet.
+   */
+  availableStances: string[]
+}
+
 export function detectMismatch(
   target: TargetProfile,
   availableKeys: readonly string[],
