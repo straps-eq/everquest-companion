@@ -68,6 +68,27 @@ export function formatDropRate(n: number): string {
   return `${formatSmall(n)} drops/hr`
 }
 
+/**
+ * MOTE EXP per hour of active time: '8.00 exp/hr'. The Motes tab's HEADLINE rate.
+ *
+ * A separate word from `formatDropRate` because it is a separate quantity, and the whole point of
+ * the mote feature is that the two disagree: six Infinitesimals an hour is `6.00 motes/hr` and
+ * `6.00 exp/hr`, while two Potentials an hour is `2.00 motes/hr` and `8.00 exp/hr`. One unit word
+ * for both would make the better camp look like the worse one on a glance.
+ *
+ * Small-number shaped like its leveling siblings: a mote rate lives in the 0–50 band, where
+ * `formatNum` would round an honest 3.2 to a flat '3'.
+ */
+export function formatMoteExpRate(n: number): string {
+  return `${formatSmall(n)} exp/hr`
+}
+
+/** MOTES per hour of active time: '6.00 motes/hr'. The count reading of the same span — the same
+ *  arithmetic `formatDropRate` prints, said in the noun this tab is about. */
+export function formatMoteRate(n: number): string {
+  return `${formatSmall(n)} motes/hr`
+}
+
 /** AA COMPLETIONS per hour: '2.40 AA/hr'. Gain lines — what the AA bar did, which the
  *  item-shop potion cannot change (it multiplies points, never experience). */
 export function formatAaRate(n: number): string {

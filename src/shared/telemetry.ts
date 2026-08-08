@@ -71,6 +71,9 @@ export const TELEMETRY_VIEWS = [
   'leveling',
   'loot',
   'planner',
+  // The mote farming advisor. Same argument as 'stance' below: a REACHABLE tab joins the enum the
+  // moment it ships, and the deploy follows.
+  'motes',
   'buffs',
   // The stance advisor. A NEW ENUM VALUE IS NOT ADDITIVE-SAFE — the app auto-updates and the
   // ingest Lambda is deployed by hand, so a shipped client reporting a value the deployed

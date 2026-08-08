@@ -13,6 +13,7 @@ import PoskyView from './features/posky/PoskyView'
 import LootView from './features/loot/LootView'
 import LevelingView from './features/leveling/LevelingView'
 import PlannerView from './features/planner/PlannerView'
+import MotesView from './features/motes/MotesView'
 import BossView from './features/bosses/BossView'
 import MobsView from './features/mobs/MobsView'
 import MapsView from './features/maps/MapsView'
@@ -116,6 +117,12 @@ function PlainView({
           remount `key` is the whole character contract. The one prop it takes is the app's own
           router — every donor name in the pane links OUT to that item's Loot drill-down. */}
       {view === 'planner' && <PlannerView key={viewKey} onOpenLoot={routing.openLoot} />}
+      {/* Motes takes no deep link — nothing on the page links INTO it yet — and one opener OUT:
+          a source mob's name goes to its Mobs page through the same router every cross-view link
+          uses, so that drill's Back reads "Back to Motes". It keeps the remount `key` for the
+          reason every sibling does: a character switch rebuilds main's loot ledger, and the other
+          character's drops are not this one's. */}
+      {view === 'motes' && <MotesView key={viewKey} onOpenMob={routing.openMob} />}
       {view === 'buffs' && <BuffsView key={viewKey} />}
       {/* Stances takes no props and no deep link: it pulls one payload from the combat engine
           (`combat:stanceAdvice`) and nothing else on the page links into it yet. It keeps the

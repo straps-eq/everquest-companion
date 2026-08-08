@@ -94,7 +94,7 @@ When you switch away from a tab.
 
 | Field | Values | What it means |
 | --- | --- | --- |
-| `view` | `overview` · `combat` · `mobs` · `maps` · `bosses` · `posky` · `alerts` · `leveling` · `loot` · `planner` · `buffs` · `stance` · `preferences` · `triage` | Which tab. A fixed list of tab names. |
+| `view` | `overview` · `combat` · `mobs` · `maps` · `bosses` · `posky` · `alerts` · `leveling` · `loot` · `planner` · `motes` · `buffs` · `stance` · `preferences` · `triage` | Which tab. A fixed list of tab names. |
 | `ms` | whole number | How long it was on screen. |
 
 ### `overlayToggle`

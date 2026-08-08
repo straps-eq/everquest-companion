@@ -15,6 +15,14 @@ export type View =
   | 'leveling'
   | 'loot'
   | 'planner'
+  // The mote farming advisor (src/renderer/src/features/motes/**): where motes drop for you, by
+  // exp per hour of active time, plus the wiki's price table and the condensing arithmetic.
+  //
+  // An ordinary RELEASED view, so it joined `TELEMETRY_VIEWS` in the same change (and TELEMETRY.md
+  // was regenerated from it) — `tests/telemetryContract.test.mts` holds every view this build can
+  // render to that rule, and only the UNRELEASED ones are exempt. Same one-edit rule the stance
+  // tab's comment below spells out.
+  | 'motes'
   | 'buffs'
   // The stance advisor (src/renderer/src/features/stance/**): what each mob measurably hits you
   // with, and which of your stances takes least of it.
@@ -66,6 +74,7 @@ export const VIEW_LABELS: Record<View, string> = {
   // unchanged — this is a label, not a refactor — and since JOS-43 this table is the ONE place a
   // tab is named, so the nav row and a drill's Back button rename together by construction.
   planner: 'Exaltations',
+  motes: 'Motes',
   buffs: 'Buffs',
   stance: 'Stances',
   preferences: 'Preferences',
@@ -86,6 +95,7 @@ const KNOWN_VIEWS: View[] = [
   'leveling',
   'loot',
   'planner',
+  'motes',
   'buffs',
   'stance',
   'preferences',

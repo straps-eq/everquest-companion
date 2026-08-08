@@ -15,6 +15,9 @@ import PetsIcon from '@mui/icons-material/Pets'
 import MapIcon from '@mui/icons-material/Map'
 import SpaceDashboardIcon from '@mui/icons-material/SpaceDashboard'
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome'
+// A scatter of grains — a mote, literally. Not a coin or a gem: the drawer's currency-adjacent
+// rows (Loot's receipt, Exaltations' sparkle) already own those readings.
+import GrainIcon from '@mui/icons-material/Grain'
 import FeedbackIcon from '@mui/icons-material/Feedback'
 // Dev-only, and its import goes with it: MUI's icon packages declare `sideEffects: false`, so
 // an icon whose only use sits inside a `false &&` branch is tree-shaken out with the branch.
@@ -62,6 +65,10 @@ const ROWS: NavRow[] = [
   // question — what drops it, what did I get, and what am I still farming for. (Its LABEL lives
   // in `VIEW_LABELS`; JOS-42 renamed the tab there, which is also where Back reads it from.)
   { view: 'planner', icon: <AutoAwesomeIcon />, badge: IN_DEV },
+  // MOTES follows Exaltations, completing the upgrade chain: what drops it, what did I get, what
+  // am I still farming for — and what is the CURRENCY those upgrades are bought with. A scatter of
+  // grains, which is what a mote is; no other row in the drawer wears it.
+  { view: 'motes', icon: <GrainIcon /> },
   { view: 'maps', icon: <MapIcon /> },
   { view: 'bosses', icon: <EmojiEventsIcon /> },
   { view: 'posky', icon: <ShieldMoonIcon /> },
