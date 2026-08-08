@@ -125,6 +125,60 @@ export interface ReleaseNote {
  */
 export const RELEASE_NOTES: readonly ReleaseNote[] = [
   {
+    version: '0.13.0',
+    date: '2026-08-08',
+    entries: [
+      {
+        kind: 'new',
+        text: 'New Motes tab: where your motes actually come from, and what they are worth.'
+      },
+      {
+        kind: 'new',
+        text: 'Motes are priced in experience rather than counted, because count is misleading — six Motes of Infinitesimal Potential are worth less than two Motes of Potential, so "how many did I get" was never the useful number.'
+      },
+      {
+        kind: 'new',
+        text: 'Zones are ranked by mote experience per hour over the time you actually spent fighting in them, so you can see which spot is really paying. Instance difficulties are kept apart: a d0 run and a d2 run are not the same farm.'
+      },
+      {
+        kind: 'new',
+        text: 'It does the condensing arithmetic for you, and the answer is usually "do not". Only Minor into Lesser and Lesser into Potential break even — two Motes of Superior Potential (7 experience each) buy one Grand (8), and two Infinitesimals buy one Minor, which throws away half of what you had.'
+      },
+      {
+        kind: 'new',
+        text: 'New Stances tab: what a raid target actually hits you with, and which stance to wear against it.'
+      },
+      {
+        kind: 'new',
+        text: 'Nothing in the game tells you whether a boss is hurting you with its fists or its spells, and the two want opposite answers — Defensive halves melee, Mage Hunter halves spells. The tab measures which it was and names the stance that takes less.'
+      },
+      {
+        kind: 'new',
+        text: 'The damage you took is corrected for the stance you were wearing when you took it, so two readings of the same boss finally agree instead of contradicting each other by twenty points.'
+      },
+      {
+        kind: 'new',
+        text: 'Evasive is offered as survive mode rather than as the answer: its 95% evade wins on paper against almost everything, but it is endurance-gated and the log never prints endurance, so the app cannot tell you whether you can hold it.'
+      },
+      {
+        kind: 'new',
+        text: 'An optional alert can tell you when you are in a materially worse stance for the thing currently beating on you — once per fight, not once per hit.'
+      },
+      {
+        kind: 'new',
+        text: 'Plane of Sky can mark quests complete from the rewards sitting in your bank. Most Sky rewards are NO DROP and none of them drop from a mob, so holding one means you turned the quest in — useful if you did your Tests before this app ever ran. It shows you the list first and nothing is written until you confirm.'
+      },
+      {
+        kind: 'new',
+        text: 'The Plane of Sky tab now states overall completion, not just per-quest progress.'
+      },
+      {
+        kind: 'fixed',
+        text: 'Damage over time ticking on YOU is finally counted. A mob poisoning or diseasing you was written in a different grammar than one ticking on anything else, and the whole family was being dropped — on one seven-minute boss fight that was a quarter of the damage taken, missing.'
+      }
+    ]
+  },
+  {
     version: '0.12.0',
     date: '2026-08-08',
     entries: [
