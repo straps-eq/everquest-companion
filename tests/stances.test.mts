@@ -22,6 +22,8 @@ import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import {
   STANCE_EFFECTS,
+  bestEmergency,
+  bestSustained,
   magicalShare,
   mitigationFor,
   rankStances,
@@ -109,7 +111,7 @@ test('ST: offensive-only stances are excluded, not ranked last', () => {
   assert.deepEqual(rankStances({ physical: 1, magical: 1 }, ['offensive', 'striker', 'ranged']), [])
 })
 
-test('ST: evasive dominates arithmetically, and carries the flag that says why to doubt it', () => {
+test('ST: evasive dominates arithmetically — which is why the ranking is not the answer', () => {
   const ranked = rankStances({ physical: 500, magical: 500 }, MNK_STANCES)
   assert.equal(ranked[0].effect.key, 'evasive')
   assert.equal(ranked[0].fraction, 0.05)
@@ -118,6 +120,30 @@ test('ST: evasive dominates arithmetically, and carries the flag that says why t
   // Balanced is the sustainable floor beneath it — the only stance with no upkeep at all.
   assert.equal(STANCE_EFFECTS.balanced.free, true)
   assert.equal(ranked.some((r) => r.effect.key === 'balanced'), true)
+})
+
+test('ST: the SUSTAINED pick skips survive-mode — the owner\u2019s correction, not the log\u2019s', () => {
+  // Evasive tops the raw ranking against essentially every mob, and standing in it is not a
+  // plan: 2 endurance per point evaded, and the wiki says the evade FAILS on empty endurance.
+  // The player called it "temp/survive mode". The arithmetic is untouched; the split is what
+  // separates "what do I wear for this fight" from "what do I hit to not die right now".
+  const ranked = rankStances({ physical: 500, magical: 500 }, MNK_STANCES)
+  const held = bestSustained(ranked)
+  const panic = bestEmergency(ranked)
+  assert.ok(held && panic)
+  assert.equal(panic.effect.key, 'evasive')
+  assert.equal(held.effect.enduranceGated, false, 'a stance you can hold cannot be one that fails')
+  // For a Monk the only ungated defensive option is Balanced, so that is the standing answer.
+  assert.equal(held.effect.key, 'balanced')
+
+  // A Paladin has real choices, and survive-mode is simply absent from his loadout.
+  const palRanked = rankStances({ physical: 800, magical: 200 }, PAL_STANCES)
+  assert.equal(bestSustained(palRanked)?.effect.key, 'defensive')
+  assert.equal(bestEmergency(palRanked), null)
+
+  // Nothing to hold and nothing to pop is null both ways, never a fabricated pick.
+  assert.equal(bestSustained([]), null)
+  assert.equal(bestEmergency([]), null)
 })
 
 test('ST: an equal-expected tie prefers the stance that cannot fail', () => {

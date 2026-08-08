@@ -118,6 +118,41 @@ test('SA: it refuses when there is nothing to be wrong about', () => {
   assert.equal(detectMismatch(target(HEAVY_MELEE), PAL, 'no such stance'), null)
 })
 
+test('SA: the alert never pushes you into survive mode', () => {
+  // THE OWNER'S CORRECTION, pinned. Evasive's 0.05 beats everything, so an alert keyed on
+  // `ranked[0]` would have told a Monk to pop survive-mode against every mob he ever fought —
+  // and he would have been right to turn it off. It costs 2 endurance per point evaded and the
+  // evade FAILS on empty endurance, which the log never prints. `detectMismatch` therefore
+  // compares against the best stance that can be HELD.
+  const MNK = ['balanced', 'evasive', 'offensive', 'ranged', 'striker']
+  const t = target([{ stanceKey: 'balanced', physical: 900, magical: 100, hits: 80 }])
+
+  // Standing in Balanced IS the sustained best for this loadout, so there is nothing to say —
+  // even though Evasive would, arithmetically, take 95% less.
+  assert.equal(detectMismatch(t, MNK, 'balanced'), null)
+
+  // Standing in an offensive stance is still caught, and the advice is the holdable one.
+  const m = detectMismatch(t, MNK, 'striker')
+  assert.ok(m)
+  assert.equal(m.bestKey, 'balanced', 'never evasive')
+
+  // …and the escape hatch is still OFFERED by the advice, just not alerted on.
+  const a = adviseFor(t, MNK)
+  assert.equal(a.emergency?.effect.key, 'evasive')
+  assert.equal(a.sustained?.effect.key, 'balanced')
+  assert.equal(a.ranked[0].effect.key, 'evasive', 'the raw ranking is untouched arithmetic')
+})
+
+test('SA: a loadout with ONLY survive-mode has no sustained answer, and says nothing', () => {
+  // Contrived but load-bearing: if the only defensive option can fail, there is no standing
+  // recommendation to make and the alert must stay silent rather than fall back to it.
+  const t = target([{ stanceKey: 'offensive', physical: 900, magical: 100, hits: 80 }])
+  const a = adviseFor(t, ['evasive', 'offensive'])
+  assert.equal(a.sustained, null)
+  assert.equal(a.emergency?.effect.key, 'evasive')
+  assert.equal(detectMismatch(t, ['evasive', 'offensive'], 'offensive'), null)
+})
+
 test('SA: a trivial gain is refused — the arithmetic can be right and the advice still bad', () => {
   // A near-even mob: defensive and mage hunter differ by a hair. Switching mid-fight for that,
   // at an endurance cost this model cannot see, is not worth an alert.

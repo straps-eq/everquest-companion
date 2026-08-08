@@ -23,6 +23,8 @@ import {
   type DamageProfile,
   type RankedStance,
   STANCE_EFFECTS,
+  bestEmergency,
+  bestSustained,
   magicalShare,
   rankStances,
   unmitigate
@@ -72,8 +74,16 @@ export interface StanceAdvice {
   hits: number
   /** 0..1 magical share of the un-mitigated profile; null when nothing usable was measured */
   magicalShare: number | null
-  /** best-first; empty when the loadout has no defensive stance at all */
+  /** best-first by expected damage alone; empty when the loadout has no defensive stance */
   ranked: RankedStance[]
+  /**
+   * The best stance that can be HELD — `ranked` minus anything whose reduction can fail. This,
+   * not `ranked[0]`, is the recommendation: Evasive wins the raw arithmetic almost everywhere
+   * and is survive-mode rather than a standing choice (see `bestSustained`).
+   */
+  sustained: RankedStance | null
+  /** The best endurance-gated option, offered separately as an escape hatch. Usually Evasive. */
+  emergency: RankedStance | null
   /** hits >= MIN_CONFIDENT_HITS */
   confident: boolean
   /** hits dropped because they were taken in an endurance-gated stance */
@@ -114,11 +124,14 @@ export function pooledProfile(samples: readonly StanceSample[]): {
 /** Pool, rank, and gate. `availableKeys` is the stances the character's classes can wear. */
 export function adviseFor(target: TargetProfile, availableKeys: readonly string[]): StanceAdvice {
   const { profile, hits, evadedHitsIgnored } = pooledProfile(target.samples)
+  const ranked = hits > 0 ? rankStances(profile, availableKeys) : []
   return {
     profile,
     hits,
     magicalShare: magicalShare(profile),
-    ranked: hits > 0 ? rankStances(profile, availableKeys) : [],
+    ranked,
+    sustained: bestSustained(ranked),
+    emergency: bestEmergency(ranked),
     confident: hits >= MIN_CONFIDENT_HITS,
     evadedHitsIgnored
   }
@@ -196,8 +209,13 @@ export function detectMismatch(
 ): StanceMismatch | null {
   if (!currentKey) return null
   const advice = adviseFor(target, availableKeys)
-  if (!advice.confident || advice.ranked.length === 0) return null
-  const best = advice.ranked[0]
+  if (!advice.confident) return null
+  // AGAINST THE SUSTAINED PICK, never `ranked[0]`. Evasive wins the raw arithmetic against
+  // almost every mob, so alerting on the ranking would have told the player to pop survive-mode
+  // in every fight he has — advice he would correctly stop listening to. An alert that fires
+  // wrongly is worse than no alert (the standing argument in alertGroupsRefused.ts).
+  const best = advice.sustained
+  if (!best) return null
   const cur = STANCE_EFFECTS[currentKey.toLowerCase()]
   if (!cur || best.effect.key === cur.key) return null
   const total = advice.profile.physical + advice.profile.magical
@@ -206,7 +224,12 @@ export function detectMismatch(
   // Striker against a mob that is hitting you IS the mismatch this alert exists to catch.
   const currentFraction = (advice.profile.physical * cur.physical + advice.profile.magical * cur.magical) / total
   const gain = currentFraction - best.fraction
-  if (gain < MIN_GAIN) return null
+  // EPSILON, and it is not pedantry. A Monk's only holdable option is Balanced at 0.9, so
+  // standing in an offensive stance is a gain of exactly MIN_GAIN — except `1 - 0.9` is
+  // 0.09999999999999998 in IEEE-754, which is `< 0.1`, so the single most common mismatch a
+  // Monk can have would never once have fired. The threshold means "at least a tenth"; a
+  // difference that exists only in the last bit of a double is not the case it excludes.
+  if (gain < MIN_GAIN - 1e-9) return null
   return {
     target,
     advice,

@@ -20,7 +20,6 @@ import {
   Box,
   Button,
   Collapse,
-  LinearProgress,
   Paper,
   Stack,
   Table,
@@ -33,7 +32,77 @@ import {
 import ExpandLessIcon from '@mui/icons-material/ExpandLess'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import { formatNum } from '../../lib/formatRate'
+import { CAT_COLOR } from '../combat/combatShared'
+import { Tooltip } from '../../lib/Tooltip'
 import type { SampleRow, StanceTargetRow } from './stanceRows'
+
+/**
+ * THE TWO HUES, borrowed rather than invented.
+ *
+ * `combatShared.CAT_COLOR` is already the app's vocabulary for "this damage was swung" (melee
+ * gold) versus "this damage was cast" (spell violet) — the meter, the timeline and the overlay
+ * all speak it. The stance question is that same partition seen from the receiving end
+ * (shared/stances.ts: physical/magical IS melee/spell, named twice by the wiki), so re-picking a
+ * palette here would have taught the user a second color language for one page.
+ */
+export const PHYSICAL_COLOR = CAT_COLOR.melee
+export const MAGICAL_COLOR = CAT_COLOR.spell
+
+/** One legend entry: a colored swatch, the share, and the points behind it. */
+function SplitLegend({
+  color,
+  label,
+  percent,
+  amount,
+  align
+}: {
+  color: string
+  label: string
+  percent: number
+  amount: number
+  align: 'left' | 'right'
+}): JSX.Element {
+  return (
+    // `useFlexGap` matters here: Stack's default spacing is a margin keyed on `direction`, which
+    // lands on the wrong side once the row is reversed. `gap` is direction-agnostic.
+    <Stack
+      direction="row"
+      spacing={0.6}
+      useFlexGap
+      alignItems="center"
+      sx={{ flexDirection: align === 'right' ? 'row-reverse' : 'row' }}
+    >
+      <Box sx={{ width: 9, height: 9, borderRadius: '2px', bgcolor: color, flexShrink: 0 }} />
+      <Typography variant="caption" sx={{ fontWeight: 700, color }}>
+        {percent}% {label}
+      </Typography>
+      <Typography variant="caption" color="text.secondary">
+        {formatNum(amount)}
+      </Typography>
+    </Stack>
+  )
+}
+
+/**
+ * The composition bar: ONE strip, two segments, in the two hues above.
+ *
+ * It replaced a `LinearProgress` whose track was tinted to fake a second segment. That trick
+ * renders the same picture and cannot carry a tooltip on either half, which is the whole reason
+ * to draw the bar: the split is the question the page exists to answer ("does this thing hit me
+ * with its fists or its spells"), so each half says what it is when you point at it.
+ */
+function SplitBar({ physical, magical }: { physical: number; magical: number }): JSX.Element {
+  return (
+    <Box sx={{ display: 'flex', height: 10, borderRadius: 5, overflow: 'hidden', bgcolor: 'rgba(255,255,255,0.06)' }}>
+      <Tooltip title={`${String(physical)}% of what this mob swings for is physical — melee, the half Defensive halves`}>
+        <Box sx={{ width: `${String(physical)}%`, bgcolor: PHYSICAL_COLOR }} />
+      </Tooltip>
+      <Tooltip title={`${String(magical)}% is magical — spell damage, the half Mage Hunter halves`}>
+        <Box sx={{ width: `${String(magical)}%`, bgcolor: MAGICAL_COLOR }} />
+      </Tooltip>
+    </Box>
+  )
+}
 
 /** One `phys/mag` pair, rendered the way every damage total in the app is (lib/formatRate). */
 function Pair({ physical, magical }: { physical: number; magical: number }): JSX.Element {
@@ -55,47 +124,53 @@ function Pair({ physical, magical }: { physical: number; magical: number }): JSX
 export function DamageBreakdown({ row }: { row: StanceTargetRow }): JSX.Element {
   const { advice, split } = row
   return (
-    <Box>
-      <Stack direction="row" spacing={2} alignItems="baseline" flexWrap="wrap">
-        <Typography variant="body2">
-          <b>{advice.hits}</b> hits pooled
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          biggest landed hit <b>{formatNum(row.biggestHit)}</b>
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          est. un-mitigated total <b>{formatNum(advice.profile.physical + advice.profile.magical)}</b>
-        </Typography>
-      </Stack>
+    <Box data-testid="stance-split">
       {split ? (
-        <Box sx={{ mt: 0.75 }}>
-          <Stack direction="row" spacing={1} sx={{ mb: 0.5 }}>
-            <Typography variant="caption" sx={{ color: 'warning.main', fontWeight: 600 }}>
-              {split.physical}% physical
-            </Typography>
-            <Typography variant="caption" color="text.secondary">
-              ({formatNum(advice.profile.physical)})
-            </Typography>
+        <>
+          <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.4 }}>
+            <SplitLegend
+              color={PHYSICAL_COLOR}
+              label="physical"
+              percent={split.physical}
+              amount={advice.profile.physical}
+              align="left"
+            />
             <Box sx={{ flexGrow: 1 }} />
-            <Typography variant="caption" color="text.secondary">
-              ({formatNum(advice.profile.magical)})
-            </Typography>
-            <Typography variant="caption" sx={{ color: 'info.main', fontWeight: 600 }}>
-              {split.magical}% magical
-            </Typography>
+            <SplitLegend
+              color={MAGICAL_COLOR}
+              label="magical"
+              percent={split.magical}
+              amount={advice.profile.magical}
+              align="right"
+            />
           </Stack>
-          <LinearProgress
-            variant="determinate"
-            value={split.physical}
-            color="warning"
-            sx={{ height: 8, borderRadius: 1, bgcolor: 'info.main' }}
-          />
-        </Box>
+          <SplitBar physical={split.physical} magical={split.magical} />
+        </>
       ) : (
-        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+        <Typography variant="body2" color="text.secondary">
           No usable split yet.
         </Typography>
       )}
+      <Stack direction="row" spacing={1.5} alignItems="baseline" flexWrap="wrap" sx={{ mt: 0.5 }}>
+        <Typography variant="caption" color="text.secondary">
+          <Box component="b" sx={{ color: 'text.primary' }}>
+            {advice.hits}
+          </Box>{' '}
+          hits pooled
+        </Typography>
+        <Typography variant="caption" color="text.secondary">
+          biggest landed{' '}
+          <Box component="b" sx={{ color: 'text.primary' }}>
+            {formatNum(row.biggestHit)}
+          </Box>
+        </Typography>
+        <Typography variant="caption" color="text.secondary">
+          est. swung for{' '}
+          <Box component="b" sx={{ color: 'text.primary' }}>
+            {formatNum(advice.profile.physical + advice.profile.magical)}
+          </Box>
+        </Typography>
+      </Stack>
     </Box>
   )
 }

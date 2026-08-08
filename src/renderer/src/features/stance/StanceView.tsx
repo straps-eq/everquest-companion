@@ -4,7 +4,15 @@
 // Everything on this page is DERIVED — nothing in the EverQuest log ever says "you are in the
 // wrong stance" — so the page is built to be checkable rather than merely confident. The header
 // states what the two inputs are and how sure the app is of them; every card carries its own
-// reservations above its own ranking; and the raw observations are one click away on each.
+// reservations above its own answer; and the raw observations are one click away on each.
+//
+// TWO ANSWERS PER CARD, NOT ONE, and the header's legend says which is which before you read a
+// single card. Evasive's 95% evade dominates the raw arithmetic against essentially every mob
+// while costing two endurance per evaded point and failing outright on empty endurance — and the
+// log never prints endurance, so the app can never verify it. `shared/stances.ts` therefore
+// splits the answer (`bestSustained` / `bestEmergency`) and this tab draws the two in different
+// colors: green is the stance you WEAR, amber is the one you POP. Stating that once up here is
+// what lets fifteen cards below stay compact enough to scan.
 //
 // THE LOADOUT IS INFERRED, and the header says so. `availableStances` comes from the class-combo
 // module's current interval, which deliberately OVER-OFFERS while the combo is unresolved (every
@@ -16,12 +24,47 @@
 
 import { type JSX, useMemo, useState } from 'react'
 import { Alert, Box, Button, Chip, Paper, Stack, Typography } from '@mui/material'
+import { alpha } from '@mui/material/styles'
 // The same icon the nav row wears (a fighting pose, not a shield — the Plane of Sky row already
 // has a shield), so the page and the row that opens it read as one thing.
 import SportsMartialArtsIcon from '@mui/icons-material/SportsMartialArts'
+import BoltIcon from '@mui/icons-material/Bolt'
+import ShieldMoonIcon from '@mui/icons-material/ShieldMoon'
 import { useStanceAdvice } from './useStanceAdvice'
 import { buildStanceRows, mismatchCount, stanceLabel } from './stanceRows'
+import { HOLD_COLOR, SURVIVE_COLOR } from './StanceRecommendation'
 import StanceTargetCard from './StanceTargetCard'
+
+/**
+ * THE LEGEND, said once at the top instead of on fifteen cards.
+ *
+ * Two colors carry the whole correction this tab exists to make — green is the stance you WEAR,
+ * amber is the one you POP — and a color the user has to infer from context fifteen times is a
+ * color that gets inferred wrong once. Stating it here costs one line and lets every card below
+ * stay compact.
+ */
+function SplitLegend(): JSX.Element {
+  return (
+    <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mt: 1 }}>
+      <Stack direction="row" spacing={0.5} alignItems="center">
+        <ShieldMoonIcon sx={{ fontSize: 15, color: HOLD_COLOR }} />
+        <Typography variant="caption" sx={{ color: HOLD_COLOR, fontWeight: 700 }}>
+          the stance to hold
+        </Typography>
+      </Stack>
+      <Stack direction="row" spacing={0.5} alignItems="center">
+        <BoltIcon sx={{ fontSize: 15, color: SURVIVE_COLOR }} />
+        <Typography variant="caption" sx={{ color: SURVIVE_COLOR, fontWeight: 700 }}>
+          survive mode
+        </Typography>
+      </Stack>
+      <Typography variant="caption" color="text.secondary">
+        Evasive&apos;s 95% evade wins the raw arithmetic against almost everything, and it is
+        endurance-gated — so it is offered as an escape hatch, never as the standing answer.
+      </Typography>
+    </Stack>
+  )
+}
 
 /**
  * How many cards render before the "show the rest" button.
@@ -44,13 +87,26 @@ function LoadoutHeader({
   mismatches: number
 }): JSX.Element {
   return (
-    <Paper variant="outlined" sx={{ p: 1.5 }}>
-      <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+    <Paper
+      variant="outlined"
+      sx={{
+        p: 1.5,
+        background: (t) =>
+          `linear-gradient(135deg, ${alpha(t.palette.primary.main, 0.08)}, ${alpha(t.palette.background.paper, 0)} 55%)`
+      }}
+    >
+      <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
         <Typography variant="body2" color="text.secondary">
           Worn now:
         </Typography>
         {currentStance ? (
-          <Chip size="small" color="primary" label={stanceLabel(currentStance)} data-testid="stance-current" />
+          <Chip
+            size="small"
+            color="primary"
+            label={stanceLabel(currentStance)}
+            sx={{ fontWeight: 700 }}
+            data-testid="stance-current"
+          />
         ) : (
           <Chip size="small" variant="outlined" label="not stated by the log this session" />
         )}
@@ -60,10 +116,11 @@ function LoadoutHeader({
             size="small"
             color="warning"
             label={`${String(mismatches)} target${mismatches === 1 ? '' : 's'} you are mis-stanced against`}
+            sx={{ fontWeight: 700 }}
           />
         )}
       </Stack>
-      <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" sx={{ mt: 1 }}>
+      <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mt: 1 }}>
         <Typography variant="body2" color="text.secondary">
           Ranking over your inferred loadout:
         </Typography>
@@ -73,7 +130,13 @@ function LoadoutHeader({
           </Typography>
         ) : (
           availableStances.map((k) => (
-            <Chip key={k} size="small" variant="outlined" label={stanceLabel(k)} sx={{ height: 20 }} />
+            <Chip
+              key={k}
+              size="small"
+              variant="outlined"
+              label={stanceLabel(k)}
+              sx={{ height: 20, fontSize: 11, borderColor: (t) => alpha(t.palette.primary.main, 0.4) }}
+            />
           ))
         )}
       </Stack>
@@ -81,6 +144,7 @@ function LoadoutHeader({
         Those are the stances your INFERRED class combo can wear — while the combo is unresolved
         the list is deliberately too wide, so a stance you cannot actually use may be ranked.
       </Typography>
+      <SplitLegend />
     </Paper>
   )
 }
@@ -134,7 +198,7 @@ export default function StanceView(): JSX.Element {
       {rows.length === 0 ? (
         <EmptyState currentStance={payload.currentStance} />
       ) : (
-        <Stack spacing={1.5}>
+        <Stack spacing={1}>
           {shown.map((r) => (
             <StanceTargetCard key={r.key} row={r} />
           ))}

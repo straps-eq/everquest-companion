@@ -14,6 +14,18 @@
 //   * dropped (evaded) hits are counted out loud, with the reason;
 //   * a profile with nothing usable in it says "nothing usable", never "no damage".
 //
+// ── AND, SINCE THE SPLIT: THE HEADLINE IS `sustained` ───────────────────────────────────────
+//
+// `shared/stances.ts` now separates `bestSustained` from `bestEmergency`, because Evasive's 0.05
+// dominates the raw arithmetic against essentially every mob while costing two endurance per
+// point evaded and failing outright when endurance runs out — "temp/survive mode", in the
+// player's words, and the log never prints endurance so the app can never verify otherwise.
+// A split the UI quietly un-splits is worse than no split, so this file pins the renderer's half
+// of it: `calloutFor` reads `advice.sustained` and NEVER falls back to the gated pick, exactly
+// one ranked row is flagged `recommended` (and it is not `ranked[0]` when Evasive is available),
+// and the endurance sentence rides `display: 'survive'` so it renders on the escape hatch rather
+// than over the recommendation.
+//
 // The arithmetic itself is NOT re-asserted here — `tests/stances.test.mts` owns the multipliers
 // and the ranking. What is asserted is that this module reports what that layer decided, and
 // that it never invents a number of its own (the fractions on screen come straight out of
@@ -24,13 +36,16 @@ import assert from 'node:assert/strict'
 import {
   buildStanceRow,
   buildStanceRows,
+  calloutFor,
+  caveatsAt,
   caveatsFor,
   mismatchCount,
   mismatchLine,
   pct,
   sampleRows,
   splitPct,
-  stanceLabel
+  stanceLabel,
+  surviveLine
 } from '../src/renderer/src/features/stance/stanceRows'
 import { adviseFor, detectMismatch, MIN_CONFIDENT_HITS } from '../src/shared/stanceAdvice'
 import type { StanceAdvicePayload, StanceSample, TargetProfile } from '../src/shared/stanceAdvice'
@@ -137,24 +152,72 @@ test('SR: a confident sample carries no thin caveat', () => {
   assert.ok(!kinds.includes('thin'))
 })
 
-test('SR: when Evasive wins, the page states the evade is endurance-gated AND unverifiable', () => {
+test('SR: when Evasive is on offer, the page states the evade is endurance-gated AND unverifiable', () => {
   // Evasive's 0.05 beats every ungated stance on any profile, so it heads this ranking.
   const t = target({ samples: [fatSample('defensive', 1000, 200)] })
   const advice = adviseFor(t, LOADOUT)
   assert.equal(advice.ranked[0].effect.key, 'evasive')
   const gated = caveatsFor(advice, []).find((c) => c.kind === 'gated')
-  assert.ok(gated, 'an endurance-gated winner must carry the caveat')
+  assert.ok(gated, 'an endurance-gated option must carry the caveat')
   assert.match(gated.text, /Evasive/)
   assert.match(gated.text, /endurance/i)
   // THE LOAD-BEARING CLAUSE: the log never prints endurance, so this cannot be checked.
   assert.match(gated.text, /log never prints endurance/i)
+  // …and it is attached to the survive-mode block, not floating above the recommendation.
+  assert.equal(gated.display, 'survive')
 })
 
-test('SR: no gated caveat when the winner is an ordinary stance', () => {
+test('SR: no gated caveat when the loadout has no endurance-gated stance at all', () => {
   const t = target({ samples: [fatSample('defensive', 1000, 200)] })
   const advice = adviseFor(t, ['balanced', 'defensive', 'mage hunter'])
   assert.equal(advice.ranked[0].effect.key, 'defensive')
+  assert.equal(advice.emergency, null)
   assert.ok(!caveatsFor(advice, []).some((c) => c.kind === 'gated'))
+})
+
+test('SR: a loadout whose ONLY defensive stance is gated has no standing recommendation', () => {
+  // A Monk who has committed nothing but Evasive: the ranking is non-empty and every entry in it
+  // can fail. The honest answer is "there is nothing to hold", never a quiet promotion.
+  const t = target({ samples: [fatSample('', 1000, 200)] })
+  const advice = adviseFor(t, ['evasive', 'striker'])
+  assert.equal(advice.ranked.length, 1)
+  assert.equal(advice.sustained, null)
+  const kinds = caveatsFor(advice, []).map((c) => c.kind)
+  assert.ok(kinds.includes('noSustained'))
+  assert.ok(!kinds.includes('noStances'), 'there IS a ranking — it is just unholdable')
+  const row = buildStanceRow(t, payload([t], 'evasive', ['evasive', 'striker']))
+  assert.equal(row.sustained, null)
+  assert.ok(row.emergency)
+  assert.equal(row.emergency.key, 'evasive')
+  const c = calloutFor(row)
+  assert.equal(c.stance, null, 'the callout must NEVER fall back to the gated pick')
+  assert.match(c.heading, /no standing recommendation/i)
+})
+
+test('SR: every caveat declares how loudly it is allowed to speak', () => {
+  const t = target({
+    samples: [fatSample('defensive', 1000, 200, 5), { stanceKey: 'evasive', physical: 90, magical: 0, hits: 7 }]
+  })
+  const caveats = caveatsFor(adviseFor(t, LOADOUT), ['Evasive'])
+  // The two load-bearing statements stay visible prose; the dropped-hit count is the only one
+  // allowed to shrink to a chip, and it keeps its whole sentence on the hover.
+  assert.deepEqual(
+    caveatsAt(caveats, 'banner').map((c) => c.kind),
+    ['thin']
+  )
+  assert.deepEqual(
+    caveatsAt(caveats, 'survive').map((c) => c.kind),
+    ['gated']
+  )
+  const chips = caveatsAt(caveats, 'chip')
+  assert.deepEqual(
+    chips.map((c) => c.kind),
+    ['evaded']
+  )
+  assert.equal(chips[0].short, '7 hits dropped')
+  assert.match(chips[0].text, /full-sized/)
+  // Every caveat carries both, always — a component may pick a color, never a meaning.
+  assert.ok(caveats.every((c) => c.short.length > 0 && (c.tone === 'warn' || c.tone === 'info')))
 })
 
 test('SR: dropped hits are counted out loud, with the stance they were dropped from', () => {
@@ -206,12 +269,53 @@ test('SR: a row reports the shared layer verbatim — no second opinion in the r
     advice.ranked.map((r) => r.fraction)
   )
   assert.deepEqual(row.mismatch, detectMismatch(t, LOADOUT, 'defensive'))
-  // Exactly one `best`, and `current` follows the worn stance rather than the ranking.
-  assert.equal(row.ranked.filter((r) => r.best).length, 1)
+  // Exactly one `recommended`, and `current` follows the worn stance rather than the ranking.
+  assert.equal(row.ranked.filter((r) => r.recommended).length, 1)
   assert.deepEqual(
     row.ranked.filter((r) => r.current).map((r) => r.key),
     ['defensive']
   )
+})
+
+test('SR: the flagged row is the SUSTAINED pick, never the arithmetic winner', () => {
+  // Evasive heads `ranked` here — 0.05 beats everything — and must head nothing on the card.
+  const t = target({ samples: [fatSample('defensive', 1000, 200)] })
+  const row = buildStanceRow(t, payload([t], 'balanced'))
+  assert.equal(row.ranked[0].key, 'evasive', 'the raw arithmetic is unchanged and still visible')
+  assert.equal(row.ranked[0].recommended, false)
+  assert.equal(row.ranked[0].emergency, true)
+  assert.ok(row.sustained)
+  assert.equal(row.sustained.key, 'defensive')
+  assert.equal(row.sustained.recommended, true)
+  assert.ok(row.emergency)
+  assert.equal(row.emergency.key, 'evasive')
+  // The row objects are the SAME objects the list renders, so the callout cannot drift from the
+  // bar it highlights.
+  assert.equal(row.sustained, row.ranked.find((r) => r.key === 'defensive'))
+  assert.equal(row.emergency, row.ranked[0])
+})
+
+test('SR: the callout names the stance to HOLD, and says whether you are already in it', () => {
+  const t = target({ samples: [fatSample('defensive', 1000, 200)] })
+  const wearing = calloutFor(buildStanceRow(t, payload([t], 'defensive')))
+  assert.ok(wearing.stance)
+  assert.equal(wearing.stance.key, 'defensive')
+  assert.equal(wearing.heading, 'Stay in')
+  const switching = calloutFor(buildStanceRow(t, payload([t], 'balanced')))
+  assert.equal(switching.heading, 'Wear')
+  // The figure the callout prints is the shared layer's own fraction, formatted once.
+  assert.ok(switching.stance)
+  assert.equal(switching.stance.percent, pct(adviseFor(t, LOADOUT).sustained?.fraction ?? -1))
+  assert.match(switching.detail, /HOLD/)
+})
+
+test('SR: the survive line describes an action with an end to it, not a place to live', () => {
+  const row = buildStanceRow(target({ samples: [fatSample('defensive', 1000, 200)] }), payload([], 'balanced'))
+  assert.ok(row.emergency)
+  const line = surviveLine(row.emergency)
+  assert.match(line, /Evasive/)
+  assert.match(line, /5%/)
+  assert.match(line, /not a stance to stand in/i)
 })
 
 test('SR: the row states its identity — mob, zone, tier label, and a key that separates tiers', () => {

@@ -254,3 +254,33 @@ export function magicalShare(profile: DamageProfile): number | null {
   const total = profile.physical + profile.magical
   return total > 0 ? profile.magical / total : null
 }
+
+/**
+ * THE BEST STANCE YOU CAN HOLD — the first in the ranking whose reduction cannot fail.
+ *
+ * WHY THE RANKING ALONE IS THE WRONG ANSWER, and this is a correction from the player rather
+ * than from the log. Evasive's 0.05 dominates every other stance arithmetically, so a naive
+ * "best" is Evasive against essentially every mob — and that is useless advice, because
+ * evasion costs TWO endurance per point evaded and the wiki says plainly it "will fail if you
+ * have insufficient endurance". In the owner's words it is "temp/survive mode": something you
+ * pop to live through a burst, not something you stand in for a raid fight.
+ *
+ * The app cannot discover that on its own — the log never prints endurance, so the cost side of
+ * the trade is permanently invisible here (see the header). What it CAN do is stop conflating
+ * two different questions. "What should I wear for this fight" and "what do I hit when I am
+ * about to die" have different answers, and `enduranceGated` already marks exactly which
+ * stances belong to the second question.
+ *
+ * So the ranking stays honest arithmetic and is not re-tuned; the SPLIT happens here.
+ */
+export function bestSustained(ranked: readonly RankedStance[]): RankedStance | null {
+  return ranked.find((r) => !r.effect.enduranceGated) ?? null
+}
+
+/**
+ * The best stance whose reduction CAN fail — survive mode. Returned separately so a surface can
+ * offer it as an escape hatch, clearly labelled, instead of as the standing recommendation.
+ */
+export function bestEmergency(ranked: readonly RankedStance[]): RankedStance | null {
+  return ranked.find((r) => r.effect.enduranceGated) ?? null
+}
