@@ -8,6 +8,13 @@
  *
  *   names        abbr → display name (the 16 /who codes)
  *   stances      client stance string      → classes that can assume it
+ *   stanceDescriptions
+ *                client stance string      → the wiki's Description cell, verbatim prose.
+ *                The same three-column table states WHO may wear a stance and WHAT it does;
+ *                the second half used to be fetched and discarded on every run. It is the
+ *                PROVENANCE for the hand-authored multipliers in src/shared/stances.ts —
+ *                tests/stanceWikiProvenance.test.mts fails if a wiki edit moves a number out
+ *                from under them. No number is parsed here; text only (see classWiki.ts).
  *   invocations  client invocation string  → classes that can recite it
  *   skills       skill name as the client prints it in
  *                "You have become better at <Skill>!" → classes that train it
@@ -39,6 +46,16 @@
  *  - output is idempotent: an unchanged payload keeps its original `scrapedAt`,
  *    so a re-run produces a byte-identical file.
  *
+ * CRLF HAZARD — CHECK YOUR LINE ENDINGS BEFORE COMMITTING A RE-RUN (measured 2026-08-08).
+ * The cache is committed with LF. On a checkout with `core.autocrlf=true` it materializes as
+ * CRLF, and two parsers on the Stances page anchor with `$`: `parseMatrixTable`'s row regex
+ * (`(.*)$` — `.` never matches `\r`) and `sectionEntryKeys`' `/\s+(Stance|Invocation)$/i` suffix
+ * strip. Both then match NOTHING, the by-class matrix and the per-class sections read as empty,
+ * and a re-run rewrites 36 `disputed[]` rows with "…has no row; prose wins". That is a LOCAL
+ * ARTIFACT, not wiki drift — the prose column (and therefore `stances`, `invocations`,
+ * `stanceDescriptions`) is unaffected, because those parsers trim per cell instead of anchoring.
+ * If a re-run's diff shows disputed[] churn, fix the checkout, not the data.
+ *
  * WHERE THE WIKI DISAGREES WITH ITSELF, PROSE WINS (design § 9 R2). Three
  * independent statements of stance/invocation access exist on one page — the
  * prose `Classes` column, the "…by Class" matrix, and the per-class sections —
@@ -56,6 +73,7 @@ import {
   parseClassSkills,
   parseMatrixTable,
   parsePerClassSections,
+  parseProseDescriptions,
   parseProseTable,
   sliceSection
 } from './sources/classWiki'
@@ -171,6 +189,8 @@ interface ClassTableFile {
   scrapedAt: string
   names: Record<string, string>
   stances: Record<string, string[]>
+  /** stance key → the wiki's Description prose. Additive (law 8): `stances` is untouched. */
+  stanceDescriptions: Record<string, string>
   invocations: Record<string, string[]>
   skills: Record<string, string[]>
   abilities: Record<string, string[]>
@@ -193,8 +213,14 @@ function readStanceInvocation(
   wt: string,
   known: Set<string>,
   abbrOf: Map<string, string>
-): { stances: Map<string, string[]>; invocations: Map<string, string[]>; disputed: string[] } {
-  const stanceProse = parseProseTable(sliceSection(wt, /^== Stances ==$/m, /^=== Stances by Class/m), known)
+): {
+  stances: Map<string, string[]>
+  stanceDescriptions: Map<string, string>
+  invocations: Map<string, string[]>
+  disputed: string[]
+} {
+  const stanceBlock = sliceSection(wt, /^== Stances ==$/m, /^=== Stances by Class/m)
+  const stanceProse = parseProseTable(stanceBlock, known)
   const stanceMatrix = parseMatrixTable(sliceSection(wt, /^=== Stances by Class/m, /^== Invocations ==$/m), known)
   const invProse = parseProseTable(sliceSection(wt, /^== Invocations ==$/m, /^=== Invocations by Class/m), known)
   const invMatrix = parseMatrixTable(sliceSection(wt, /^=== Invocations by Class/m, /^== Pure Melee ==$/m), known)
@@ -203,8 +229,16 @@ function readStanceInvocation(
   const perClass = (t: Map<string, string[]>): Map<string, string[]> =>
     new Map([...sections].filter(([k]) => t.has(k)))
 
+  // Descriptions come from the SAME block as the authoritative prose column and are filtered to
+  // the keys that column produced: a description for a row `stances` does not carry would be a
+  // stance nothing can wear, and pairing the two maps by construction keeps the join total.
+  const stanceDescriptions = new Map(
+    [...parseProseDescriptions(stanceBlock)].filter(([k]) => stanceProse.has(k))
+  )
+
   return {
     stances: stanceProse,
+    stanceDescriptions,
     invocations: invProse,
     disputed: [
       ...disputes('stance', 'the by-class matrix', stanceProse, stanceMatrix),
@@ -344,6 +378,7 @@ async function main(): Promise<void> {
     scrapedAt: new Date().toISOString(),
     names: sortedRecord(names),
     stances: sortedRecord(si.stances),
+    stanceDescriptions: sortedRecord(si.stanceDescriptions),
     invocations: sortedRecord(si.invocations),
     skills: sortedRecord(new Map([...pages.skills].map(([k, v]) => [k, [...v].sort()]))),
     abilities: sortedRecord(buildAbilities(aa, pages.footnotes)),
@@ -356,7 +391,8 @@ async function main(): Promise<void> {
   const rows = (r: Record<string, ClassUnlock[]>): number =>
     Object.values(r).reduce((n, v) => n + v.length, 0)
   console.log(
-    `\nWrote ${Object.keys(out.names).length} classes · ${Object.keys(out.stances).length} stances · ` +
+    `\nWrote ${Object.keys(out.names).length} classes · ${Object.keys(out.stances).length} stances ` +
+      `(${Object.keys(out.stanceDescriptions).length} described) · ` +
       `${Object.keys(out.invocations).length} invocations · ${Object.keys(out.skills).length} skills · ` +
       `${Object.keys(out.abilities).length} abilities · ${rows(out.skillUnlocks)} skill unlocks · ` +
       `${rows(out.discUnlocks)} disc unlocks · ${out.disputed.length} disputed → ${OUT_PATH}`
