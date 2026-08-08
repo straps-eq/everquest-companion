@@ -1,5 +1,5 @@
 {
-  "scrapedAt": "2026-08-05T07:52:20.850Z",
+  "scrapedAt": "2026-08-08T03:59:03.545Z",
   "names": {
     "BER": "Berserker",
     "BRD": "Bard",
@@ -82,6 +82,17 @@
       "ROG",
       "WAR"
     ]
+  },
+  "stanceDescriptions": {
+    "balanced": "All incoming damage is reduced by 10% and your chance to hit is increased by 10%. Endurance regen excluding out of combat bonus regen is doubled. There is no endurance cost to upkeep this stance.",
+    "berserker": "While this stance is active, attack speed and combat skill recharge rate is doubled and your chance to hit and combat skill damage is increased by 25%. Every point of damage dealt consumes half that amount in endurance, with a reduction based on your strategy skill. You also take 8.3% of outgoing damage to yourself. Bonus damage from critical hits and similar effects do not cost endurance.",
+    "channeler": "All incoming damage is reduced by 40% and your chance to successfully channel is increased. Half of the mitigated damage is charged to both mana and endurance, with a reduction based on your strategy skill.",
+    "defensive": "All incoming melee damage is reduced by 50% and incoming magical damage is reduced by 20%. Every point of damage reduced consumes an equal amount of endurance, with a reduction based on your strategy skill.",
+    "evasive": "You have a 95% chance to evade all incoming attacks. Every point of damage evaded consumes 2 endurance, with a reduction based on your strategy skill. Evasion will fail if you have insufficient endurance, or while playing dead.",
+    "mage hunter": "All incoming spell damage is reduced by 50% and incoming physical damage is reduced by 20%. Every point of damage reduced consumes an equal amount of endurance, with a reduction based on your strategy skill.",
+    "offensive": "Outgoing melee damage is increased by 100% and your chance to hit is increased by 25%. Every point of bonus damage dealt consumes an equal amount of endurance, with a reduction based on your strategy skill. When below 25% endurance, the chance to hit bonus is reduced based on the remaining percent of endurance. Bonus damage from critical hits and similar effects do not cost endurance.",
+    "ranged": "Your range attack has no minimum distance, gains a 25% accuracy bonus, and can double and triple attack. Every point of damage consumes endurance, with a reduction based on your strategy skill.",
+    "striker": "Outgoing weapon skill abilities deal 3x damage and non-weapon skill abilities deal 5x damage, and your chance to hit is increased by 25%. Every point of damage dealt consumes an equal amount of endurance, with a reduction based on your strategy skill. When below 25% endurance, the chance to hit bonus is reduced based on the remaining percent of endurance. Bonus damage from critical hits and similar effects do not cost endurance."
   },
   "invocations": {
     "arcane mastery": [

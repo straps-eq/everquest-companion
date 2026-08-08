@@ -120,10 +120,26 @@ function cachePath(title: string): string {
   return resolve(CACHE_DIR, `${title.replace(/[^A-Za-z0-9]+/g, '_')}.wikitext`)
 }
 
-/** A page's raw wikitext, from disk when we already have it. */
+/**
+ * NORMALIZE LINE ENDINGS AT THE BOUNDARY — the cache is committed LF, and a Windows checkout
+ * with `core.autocrlf=true` (git's default there) hands this back as CRLF.
+ *
+ * That is not cosmetic. Several parsers on the `Stances & Invocations` page are LINE-ANCHORED,
+ * and `.` never matches `\r`, so a trailing carriage return silently defeats `$`:
+ *   * `parseMatrixTable`'s row regex matched 18 rows on LF and ZERO on CRLF — the entire
+ *     "…by Class" matrix vanished;
+ *   * `sectionEntryKeys` failed to strip the `Stance`/`Invocation` suffix from `"Balanced
+ *     Stance\r"`, so no per-class section key ever joined.
+ * Both of those feed `disputes()`, so re-running on a CRLF checkout rewrote 36 `disputed[]`
+ * rows — inventing "the by-class matrix has no row" for every stance and LOSING one real
+ * dispute. Measured on pristine HEAD, so it predates any of this and is not wiki drift.
+ *
+ * Fixed HERE rather than by asking contributors to set a git config: the parsers legitimately
+ * want lines, and the one place that knows these bytes came off a disk is this function.
+ */
 async function fetchWikitext(title: string): Promise<string | null> {
   const file = cachePath(title)
-  if (existsSync(file)) return readFileSync(file, 'utf8')
+  if (existsSync(file)) return readFileSync(file, 'utf8').replace(/\r\n/g, '\n')
 
   const params = new URLSearchParams({
     action: 'parse',
