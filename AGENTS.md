@@ -1777,6 +1777,63 @@ of it is upstream's concern, and it is kept in one block so it is trivially drop
   until he changes it — flipping that default (or prompting once when a dump
   exists but the source is `log`) is an open, unmade improvement.
 
+### Merging upstream — the loop, and the six things that recur
+
+Done twice (2026-08-08, 31 commits then 7). Both times ONE content conflict and
+a handful of gates firing, all of them predictable. The loop:
+
+```
+git fetch upstream
+git merge-tree --write-tree main upstream/main   # DRY RUN: names conflicts, touches nothing
+git merge --no-ff upstream/main
+# resolve, then: typecheck + lint + npm test + npm run test:e2e, THEN commit
+```
+
+The dry run is worth the extra command — `merge-tree` lists the conflicts
+without staging anything, so the decision to merge now or later is made before
+the working tree moves. (`git worktree add` cannot help here: `main` is already
+checked out, so the trial merge happens in the real tree either way.)
+
+Most of the fork's ~70 diverged files are NEW (`features/motes/`,
+`features/stance/`, the posky reward files, their tests) and never conflict.
+The standing surface is the dozen-odd EDITS to upstream's own files:
+
+1. **`electron-builder.yml` `publish.owner`** — the one that matters most, and
+   the one a merge can revert silently because upstream edits that file too.
+   `tests/forkPublishTarget.test.mts` fails the build if it ever says `jmoyers`
+   again. Restore the owner; never update the test.
+2. **THE FROZEN-NUMBER TRIPWIRES WILL FIRE, AND THEY ARE RIGHT TO.** The fork's
+   second-person DoT fix (`DOT_RE`, `ha(?:s|ve)`) makes `inTotal` larger than
+   upstream's law-8 baselines, which were cut with those ticks missing. Three
+   are already corrected (`combatRoundStats` w49 +20, `combatMendLane` W55 +212,
+   `combatRangedLane` W58 +58) and EVERY NEW UPSTREAM FIXTURE containing
+   `You have taken` will do it again. The fix is always the same and never
+   "revert the parser": `grep -c 'have taken' <fixture>`, sum the amounts,
+   confirm the delta matches to the point, update the number with the
+   arithmetic written beside it.
+3. **`src/shared/logEvents.ts` sits at EXACTLY 400 of 400 code lines.** Upstream's
+   `healUnstated` and the fork's `stanceMismatch` between them spent all the
+   headroom, and a redundant re-export was deleted to buy the last line back.
+   The next event kind from EITHER side must factor a family out.
+4. **`src/main/combat/ingest.ts`** — the fork threads `live` through
+   `ingestCombat(st, ev, live)` for the stance advisor's replay gate. That
+   signature is the one line that has actually conflicted; upstream edits its
+   doc comment. Keep both halves.
+5. **A new view is a THREE-file change** (`appViews.ts` + `shared/telemetry.ts`
+   `TELEMETRY_VIEWS` + a regenerated `TELEMETRY.md`), enforced by a contract
+   test. When upstream adds a view, `TELEMETRY.md` conflicts — REGENERATE it
+   (`npm run gen:telemetry-doc`) rather than hand-merging a generated file.
+6. **`src/main/data/classes.json`** carries the fork's `stanceDescriptions`. If
+   upstream re-scrapes, re-run `npm run scrape:classes` after the merge rather
+   than resolving the JSON by hand; the CRLF normalization in
+   `scrape-classes.ts` (also fork-local) is what keeps that regeneration to a
+   12-line additive diff instead of 36 fabricated `disputed[]` rows.
+
+Verification bar for a merge: typecheck + lint + full unit suite green, and
+e2e at the machine's **17/20** baseline (the three DPI failures above). The
+author identity is `straps.eq@gmail.com`; it was wrong on 15 commits once and
+had to be rewritten before the first push.
+
 ## Known open items
 
 - **TOOLCHAIN WAVE — LANDED** (was: security, owner-flagged 2026-08-04;
