@@ -16,6 +16,14 @@ export type View =
   | 'loot'
   | 'planner'
   | 'buffs'
+  // The stance advisor (src/renderer/src/features/stance/**): what each mob measurably hits you
+  // with, and which of your stances takes least of it.
+  //
+  // It is an ordinary RELEASED view, so it joined `TELEMETRY_VIEWS` in the same change (and
+  // TELEMETRY.md was regenerated from it): `tests/telemetryContract.test.mts` holds every view
+  // this build can render to that rule, and only the UNRELEASED ones are exempt. The dwell enum
+  // is closed and deployed by hand, so shipping the tab and widening the schema are one edit.
+  | 'stance'
   | 'preferences'
   // OWNER-ONLY view (src/renderer/src/features/triage/**). It stays in the union
   // unconditionally because a union member is a TYPE and types are erased — nothing of it
@@ -59,6 +67,7 @@ export const VIEW_LABELS: Record<View, string> = {
   // tab is named, so the nav row and a drill's Back button rename together by construction.
   planner: 'Exaltations',
   buffs: 'Buffs',
+  stance: 'Stances',
   preferences: 'Preferences',
   triage: 'Triage',
   character: 'Character'
@@ -78,6 +87,7 @@ const KNOWN_VIEWS: View[] = [
   'loot',
   'planner',
   'buffs',
+  'stance',
   'preferences',
   // Compile-time in a BUILD (`false ? [...] : []` folds away, taking the literal with it) and a
   // runtime read of the opt-in on a dev server — so a contributor's checkout, which has no

@@ -72,6 +72,14 @@ export const TELEMETRY_VIEWS = [
   'loot',
   'planner',
   'buffs',
+  // The stance advisor. A NEW ENUM VALUE IS NOT ADDITIVE-SAFE — the app auto-updates and the
+  // ingest Lambda is deployed by hand, so a shipped client reporting a value the deployed
+  // validator has not learned fails the whole batch and drops every counter with it. That is why
+  // an UNRELEASED view stays out (JOS-45, `dwellView`). This one is a REACHABLE tab, so it joins
+  // the enum the moment it ships and the deploy follows, which is exactly what
+  // `tests/telemetryContract.test.mts` ("the view list is the SAME set the app can render")
+  // exists to force.
+  'stance',
   'preferences',
   'triage'
 ] as const

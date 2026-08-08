@@ -20,6 +20,7 @@ import CombatView from './features/combat/CombatView'
 import OverviewView from './features/overview/OverviewView'
 import AlertsView from './features/alerts/AlertsView'
 import BuffsView from './features/buffs/BuffsView'
+import StanceView from './features/stance/StanceView'
 import PreferencesView from './features/preferences/PreferencesView'
 import FeedbackDialog from './features/feedback/FeedbackDialog'
 // OWNER-ONLY. `devTriage` holds the single `DEV_TOOLS ? lazy(() => import(…)) : null` — the
@@ -116,6 +117,11 @@ function PlainView({
           router — every donor name in the pane links OUT to that item's Loot drill-down. */}
       {view === 'planner' && <PlannerView key={viewKey} onOpenLoot={routing.openLoot} />}
       {view === 'buffs' && <BuffsView key={viewKey} />}
+      {/* Stances takes no props and no deep link: it pulls one payload from the combat engine
+          (`combat:stanceAdvice`) and nothing else on the page links into it yet. It keeps the
+          remount `key` for the same reason every sibling does — a character switch rebuilds
+          main's ledger, and the mob profiles measured for the OLD character are not this one's. */}
+      {view === 'stance' && <StanceView key={viewKey} />}
       {view === 'alerts' && <AlertsView key={viewKey} {...{ onOpenVoicePrefs }} />}
       {/* UNRELEASED (JOS-45). It sits HERE, below the no-characters gate, and not beside the
           triage branch: unlike triage this tab reads the game log (name, level, loadout) and

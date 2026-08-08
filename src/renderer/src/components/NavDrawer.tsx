@@ -8,6 +8,9 @@ import TrendingUpIcon from '@mui/icons-material/TrendingUp'
 import EmojiEventsIcon from '@mui/icons-material/EmojiEvents'
 import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive'
 import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh'
+// A FIGHTING POSE, not a shield: the Plane of Sky row two above already wears ShieldMoon, and
+// two shields in one twelve-row drawer is a row nobody finds twice.
+import SportsMartialArtsIcon from '@mui/icons-material/SportsMartialArts'
 import PetsIcon from '@mui/icons-material/Pets'
 import MapIcon from '@mui/icons-material/Map'
 import SpaceDashboardIcon from '@mui/icons-material/SpaceDashboard'
@@ -64,7 +67,12 @@ const ROWS: NavRow[] = [
   { view: 'posky', icon: <ShieldMoonIcon /> },
   { view: 'alerts', icon: <NotificationsActiveIcon /> },
   { view: 'leveling', icon: <TrendingUpIcon /> },
-  { view: 'buffs', icon: <AutoFixHighIcon />, badge: IN_DEV }
+  { view: 'buffs', icon: <AutoFixHighIcon />, badge: IN_DEV },
+  // STANCES sits last among the feature rows because it is the newest and the narrowest: it
+  // answers one question (which stance against this mob) off measurements the combat engine
+  // already keeps. It wears the same `in dev` chip Buffs and Exaltations do — state, not process:
+  // the ranking is real but the loadout behind it is an INFERRED class combo.
+  { view: 'stance', icon: <SportsMartialArtsIcon />, badge: IN_DEV }
 ]
 
 /** Bottom-aligned, outside ROWS — it is not a feature view and never moves. */
