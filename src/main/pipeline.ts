@@ -23,6 +23,7 @@ import { LogBus } from './log/bus'
 import { EpochDetector } from './log/epochDetector'
 import { SessionDetector } from './log/sessionDetector'
 import { baselineOverlay, loadUserOverlay } from './data/overlayPersistence'
+import { availableStanceKeys } from './data/stanceLoadout'
 import { CombatEngine } from './combat/engine'
 import { ModuleRegistry } from './modules/registry'
 import { createModules } from './modules/wiring'
@@ -154,6 +155,27 @@ registry.attach(bus)
 // already consumed the event the engine is about to. A pull rather than a copy, because a user
 // edit made between two log lines must be visible to the very next one.
 combat.setRoster(rosterModule)
+// THE STANCE-ADVICE SEAM (main/combat/stanceAdvisor.ts). The engine measures what each mob hits
+// you with and knows what you are wearing; it does NOT know which stances this character can
+// press (the combo module infers that) and it does not own the bus. Both are handed to it here.
+//
+// The loadout is a PULL, read at the instant of each evaluation, for the reason ipc/stanceAdvice.ts
+// states: the combo module re-derives its intervals whenever evidence lands (a single `/who` row
+// re-labels the past hour), so a copy taken at wiring time describes a character we had not
+// finished identifying. It reads `currentInterval()` rather than `snapshot()` deliberately — a
+// snapshot re-baselines that module's delta bookkeeping, and a consumer that merely LOOKS must
+// not silently swallow a delta the renderer was owed.
+//
+// The emission is `emitDerived`, the same door buffs/epoch/offlineGap use: the event is QUEUED
+// and delivered after the primary damage event has finished reaching every listener, so nothing
+// re-enters the fold. No feedback loop is possible — the advisor only ever fires from an incoming
+// `damage` event, and a `stanceMismatch` is not one.
+combat.setStanceAdvisor({
+  availableStances: () => availableStanceKeys(comboModule.currentInterval()),
+  emit: (ev, live) => {
+    bus.emitDerived(ev, live)
+  }
+})
 bus.subscribe((ev, live) => combat.ingestEvent(ev, live))
 // Item-knowledge prefetch (Task #53): when a LIVE loot event arrives, warm the
 // "what's this for" cache in the background (throttled by itemLookup's serialized queue

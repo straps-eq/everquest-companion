@@ -20,6 +20,16 @@
 // `buffExpired` event the buffs module synthesizes (a resolved, unambiguous "wears off you /
 // your pet" signal) — see shared/logEvents.ts BuffExpiredEvent + log/bus.ts emitDerived.
 //
+// A DERIVED EVENT NEEDS NOTHING FROM THIS FILE, and the second one proves it. `stanceMismatch`
+// (main/combat/stanceAdvisor.ts) is the first event in the app that NO log line produces — a
+// join over a mob's measured damage profile, the wiki's stance multipliers and the stance worn
+// right now. It arrives on the same bus through the same `emitDerived` queue and is matched by
+// the same string compare on `kind`; its `target` field is the mob, so `cooldownScope:'target'`
+// works on it for free, and it names no spell (the table below is unchanged). The one thing
+// that IS different about it is where the throttling lives: the condition is continuously true
+// for a whole fight rather than true for one line, so it is rate-limited at the SOURCE (once per
+// mob/tier/recommendation per engagement) and the def's cooldown is only the last bound.
+//
 // Alert defs are owned by the store; the module holds a live copy that main keeps
 // in sync (setDefs) whenever the user saves/deletes an alert.
 
@@ -165,8 +175,9 @@ function compileCondition(t: AlertTriggerPrimitive): CompiledCondition {
 // mode fires on them: zone, loot, offer, trade, level, expGain, aaGain, aaSpend, aaActivate (an
 // AA name is not a spell), death, playerDeath, mitigation, miss, charm, uncharm, petClaim,
 // spellEmote (the emote text names no spell — that ambiguity is the point of the family),
-// illusionFade (27-way ambiguous by design), poisonDry, stanceChange, invocationChange, selfWho,
-// skillUp, itemActivate, itemMerge, itemMergeFailed, consider, epoch, sessionStart, campStart,
+// illusionFade (27-way ambiguous by design), poisonDry, stanceChange, invocationChange,
+// stanceMismatch (a derived claim about a MOB and a stance; no spell is involved at any point),
+// selfWho, skillUp, itemActivate, itemMerge, itemMergeFailed, consider, epoch, sessionStart, campStart,
 // campAbort, offlineGap, unknown — plus EVERY 'raw' trigger that matched a spell-less line and
 // every renderer-evaluated 'app' signal (bossDefeat / questComplete, which arrive via appFired
 // and never see a LogEvent at all).

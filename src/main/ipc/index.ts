@@ -32,6 +32,7 @@ import { registerRosterIpc } from './roster'
 import { registerShareIpc } from './share'
 import { registerSoundsIpc } from './sounds'
 import { registerSpeechIpc } from './speech'
+import { registerStanceAdviceIpc } from './stanceAdvice'
 import { registerTelemetryIpc } from './telemetry'
 // The celebration toast's producer channel. It lives beside the window it feeds (src/main/toast.ts)
 // rather than in this folder, because everything it does is window fan-out + item resolution.
@@ -49,6 +50,10 @@ export function registerIpc(): void {
   registerOutputsIpc()
   registerWorldIpc()
   registerComboIpc()
+  // Reads the combat engine AND the combo module, so it is registered after both are
+  // constructed by pipeline.ts — as every handler here is; the order of these calls carries no
+  // semantics (see the header), it sits beside the two modules it joins purely to read well.
+  registerStanceAdviceIpc()
   registerRosterIpc()
   registerAlertsIpc()
   registerShareIpc()

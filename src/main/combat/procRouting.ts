@@ -214,6 +214,11 @@ export function applyStance(st: EngineState, group: 'stance' | 'invocation', nam
   if (cur?.name === name) return
   if (group === 'stance') st.stance = { name, ts }
   else st.invocation = { name, ts }
+  // THE STANCE ADVISOR RE-ARMS HERE, and this is the only place it can: every fire and every
+  // refusal it recorded was a judgement about the stance that just stopped being worn
+  // (stanceAdvisor.ts's header). The no-op re-assert returned above, so stance spam cannot
+  // re-arm it. An INVOCATION change is not a stance change and deliberately does not.
+  if (group === 'stance') st.stanceAdvisor.onStanceChange()
   // SESSION SPAN (proc-analytics §3.1), alongside — never instead of — the encounter's
   // stanceSpans below: that list feeds the shipped TimelineView and sits inside the
   // byte-identical regression surface. Two lists, one writer. The nine stances (and the nine

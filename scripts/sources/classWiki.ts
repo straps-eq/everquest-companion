@@ -145,6 +145,60 @@ export function parseProseTable(block: string, known: Set<string>): Map<string, 
   return out
 }
 
+/**
+ * The prose `Description` column of the SAME table — what the row actually DOES.
+ *
+ * WHY THIS EXISTS: the Stances table states its mechanics in quantified English
+ * ("All incoming melee damage is reduced by 50% and incoming magical damage is reduced by
+ * 20%."), and until now the scrape fetched that column on every run and threw it away —
+ * `parseProseTable` keeps cells[0] and the LAST cell only. src/shared/stances.ts hand-authors
+ * the multipliers those sentences state (law 12: a table a human verified, never a fuzzy match
+ * over eleven sentences of English) and pins each one against the wiki's own words, so the
+ * prose has to be IN the committed data for that pin to be checkable outside the raw cache.
+ *
+ * DELIBERATELY TEXT ONLY. No number is parsed out here — "reduced by 50%" is ambiguous about
+ * what, against which damage class, with which exception, and a scraper that guessed wrong
+ * would produce a confident wrong recommendation. This function's whole job is provenance.
+ *
+ * Keyed EXACTLY like `parseProseTable` (`clientKey(cells[0])`), so the two maps join by key —
+ * that is what lets a consumer walk `stances` and find the matching description.
+ *
+ * MEASURED SHAPE (scripts/sources/cache/classes/Stances_Invocations.wikitext):
+ *  - every description cell is wrapped in `<section begin="X" />…<section end="X" />` labelled
+ *    transclusion markers (the wiki reuses these cells on the class pages) — `plain()` already
+ *    eats them along with the `[[strategy]]` links, keeping the link TEXT;
+ *  - two of the nine (Offensive, Striker) are MULTI-LINE: the cell continues on bare lines that
+ *    carry no leading `|`, which is why `rowCells` cannot be reused — it filters to `|`-prefixed
+ *    lines and would silently truncate those two mid-sentence. Continuation lines are folded
+ *    into the cell above and the whitespace collapsed, so one row is one line of text.
+ */
+export function parseProseDescriptions(block: string): Map<string, string> {
+  const out = new Map<string, string>()
+  for (const chunk of tableRows(block)) {
+    const cells = rowCellsFolded(chunk)
+    // Stance | Description | Classes. Fewer than three cells is not that table's row shape, and
+    // guessing which of two cells is the description would be exactly the fuzzy match law 12
+    // forbids — such a row is skipped rather than mis-keyed.
+    if (cells.length < 3) continue
+    const key = clientKey(cells[0])
+    const text = plain(cells[1])
+    if (key.length > 0 && text.length > 0) out.set(key, text)
+  }
+  return out
+}
+
+/** `rowCells`, but a bare continuation line belongs to the cell above (see above: 2 of 9 rows). */
+function rowCellsFolded(chunk: string): string[] {
+  const cells: string[] = []
+  for (const line of chunk.split('\n')) {
+    if (line.startsWith('|}')) break // end of table: nothing after it belongs to a cell
+    if (line.startsWith('|+')) continue // caption
+    if (line.startsWith('|')) cells.push(line.slice(1))
+    else if (cells.length > 0) cells[cells.length - 1] += `\n${line}`
+  }
+  return cells.map((c) => c.trim())
+}
+
 /** The "…by Class" O-matrix. Second opinion only; prose wins any disagreement. */
 export function parseMatrixTable(block: string, known: Set<string>): Map<string, string[]> {
   const out = new Map<string, string[]>()

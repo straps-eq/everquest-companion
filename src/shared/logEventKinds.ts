@@ -50,6 +50,9 @@ export const ALL_LOG_EVENT_KINDS = [
   'poisonCoat',
   'poisonDry',
   'epoch',
+  // Derived by the engine, not parsed from a line — see shared/stanceAdvice.ts. It sits beside
+  // `epoch` at the derived end of the list for the same reason `buffExpired` sits by the buffs.
+  'stanceMismatch',
   'unknown'
 ] as const satisfies readonly LogEventKind[]
 

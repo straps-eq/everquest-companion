@@ -22,6 +22,8 @@ import {
 import { idKey } from '../log/parser'
 import { SEC_RINGS, type EngineFoldProbe } from './foldProbe'
 import { StateTimeline } from './stateTimeline'
+import { StanceLedger } from './stanceLedger'
+import { StanceAdvisor } from './stanceAdvisor'
 import { CharmModel } from './charmModel'
 import { SpecialAttacks } from './specialAttacks'
 import type { RecentCasts } from './procDetect'
@@ -196,6 +198,23 @@ export class EngineState {
    */
   specials = new SpecialAttacks()
   /**
+   * WHAT EACH MOB HITS YOU WITH, PER STANCE (stanceLedger.ts) — the measurement behind the
+   * stance recommendation. SESSION-level and purely ADDITIVE, exactly like `stateTimeline`: it
+   * is a second index over incoming damage the meter has already counted, so no damage total
+   * moves (law 8's tripwire). Written by the incoming branch of the ingest fold, cleared by
+   * reset() and by the epoch boundary (the beta character's fights are not this one's).
+   */
+  stanceLedger = new StanceLedger()
+  /**
+   * WHEN TO SAY THE MOB WOULD HURT LESS IN ANOTHER STANCE (stanceAdvisor.ts) — the throttle in
+   * front of the derived `stanceMismatch` event, and the only piece of this feature that decides
+   * anything about TIME. Beside the ledger because it reads nothing else: the measurement above,
+   * the stance below, and a loadout pull the pipeline installs. INERT until `install()` is
+   * called, so every test and the replay bench behave exactly as they did before it existed.
+   * Session-scoped like everything here; cleared by reset() and by the epoch boundary.
+   */
+  stanceAdvisor = new StanceAdvisor()
+  /**
    * THE ENGINE'S OWN ATTRIBUTION SEAM (JOS-59, foldProbe.ts). Undefined on every boot and in
    * every test; installed only by `CombatEngine.attachFoldProbe`, which only the bench calls.
    * Read as `const p = this.probe; if (p) …` on the hot paths — one field read and one branch.
@@ -252,6 +271,10 @@ export class EngineState {
     this.coatCombat = []
     this.slowSamples = []
     this.stateTimeline.reset()
+    this.stanceLedger.reset()
+    // The arming state goes with the measurement it throttles; the INSTALLED deps do not (they
+    // are wiring, and pipeline.ts installs them once, before the first character is tailed).
+    this.stanceAdvisor.reset()
     this.recentCasts.clear()
     this.quickBuffTs = 0
     this.specials.reset()

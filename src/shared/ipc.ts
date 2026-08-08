@@ -49,6 +49,15 @@ export const IPC = {
   // renderer -> main: fuzzy-search the WHOLE (uncapped) fight history + the live fight by
   // name/zone (Task #61). Args: (text, limit?). Returns FightSearchResult.
   searchFights: 'combat:searchFights',
+  // renderer -> main: everything the stance advisor needs, in ONE call — the measured
+  // per-(mob, zone, tier) incoming-damage profiles, the stance worn right now, and the stances
+  // this character's class loadout can actually wear. No args; returns StanceAdvicePayload
+  // (shared/stanceAdvice.ts). One channel rather than three because the three answers must
+  // describe the same instant: a ranking computed from targets read at t against a loadout read
+  // at t+1 is a ranking of a character who existed in neither. It is a separate channel from
+  // `combat:snapshot` because it is read on demand by one panel, not polled every second by the
+  // meter and every open overlay.
+  getStanceAdvice: 'combat:stanceAdvice',
 
   // ---- alerts extension (Task #18) ----
   // CRUD over alert defs + global sound prefs (renderer -> main).

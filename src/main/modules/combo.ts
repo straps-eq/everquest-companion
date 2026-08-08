@@ -145,6 +145,21 @@ export class ComboModule implements EqModule<ComboSnap, ComboDelta> {
     return this.intervals
   }
 
+  /**
+   * The OPEN (current) interval — the loadout as of now, or null before any evidence exists.
+   *
+   * A read that does NOT touch the delta bookkeeping, which is the whole reason it exists.
+   * `snapshot()` below re-baselines `pushed` (correctly: a snapshot IS the renderer's new
+   * baseline), so a main-side consumer that called it merely to LOOK at the current interval
+   * would silently swallow the next delta the renderer was owed. One such consumer used to be
+   * hypothetical; the stance advisor (main/combat/stanceAdvisor.ts) reads the loadout repeatedly
+   * while a fight is going on, so it reads it here instead.
+   */
+  currentInterval(): ComboInterval | null {
+    const intervals = this.current()
+    return intervals.length > 0 ? intervals[intervals.length - 1] : null
+  }
+
   snapshot(): { seq: number; state: ComboSnap } {
     const intervals = this.current()
     // A snapshot IS the renderer's new baseline, so the delta bookkeeping resets with it —
