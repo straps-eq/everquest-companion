@@ -64,6 +64,15 @@ export type LogEventKind =
   | 'poisonProc'
   | 'poisonCoat'
   | 'poisonDry'
+  // THE FIRST KIND NO LOG LINE PRODUCES. `stanceMismatch` is synthesized by the combat engine
+  // (main/combat/stanceAdvisor.ts) out of a join the log cannot state in a sentence: the mob's
+  // measured damage profile, the wiki's stance multipliers, and the stance worn right now. It
+  // exists because alertGroupsRefused.ts's "Pet died" entry wrote the rule down — an AlertDef
+  // "matches text, not entities … needs a derived event before it can ship". It carries
+  // `{target, zone, tier, stance, best, lessPct, hits}` (shared/stanceAdvice.ts), so
+  // `where:{best:'defensive'}` or `where:{tier:'2'}` are ordinary field matchers, and `target`
+  // is the mob — which is what makes `cooldownScope:'target'` work on it for free.
+  | 'stanceMismatch'
   | 'unknown'
 
 /** Renderer-side app signals an alert can fire on (evaluated in the player, not main). */

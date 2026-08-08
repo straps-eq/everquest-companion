@@ -128,6 +128,20 @@ function rowKey(mobKey: string, zoneBase: string, tier: number): string {
   return `${mobKey}|${zoneBase}|${tier}`
 }
 
+/** One row, COPIED out (row and samples both) so a consumer cannot mutate engine state through
+ *  the projection. One function, so `targets()` and `targetByKey()` cannot drift apart. */
+function toProfile(row: LedgerRow): TargetProfile {
+  return {
+    mobKey: row.mobKey,
+    mobName: row.mobName,
+    zoneBase: row.zoneBase,
+    tier: row.tier,
+    samples: [...row.samples.values()].map((s) => ({ ...s })),
+    lastSeenTs: row.lastSeenTs,
+    biggestHit: row.biggestHit
+  }
+}
+
 /**
  * The session-level incoming-damage ledger. One per engine; owned by `EngineState`, written
  * only by the incoming branch of the ingest fold, and reset wherever the engine resets.
@@ -158,9 +172,15 @@ export class StanceLedger {
    * lands under `zoneBase: ''`, which is the honest "we do not know where this was" bucket. It is
    * not guessed and it never merges with a named zone, so a later real zone line simply starts a
    * new row rather than retroactively relabelling this one.
+   *
+   * RETURNS THE ROW KEY it folded into (null when the hit was refused). The advisor beside this
+   * ledger (stanceAdvisor.ts) needs to know WHICH target just hit the player, and re-deriving
+   * `idKey(name)` + `zoneTier(zone)` + the join on every incoming tick would be a second copy of
+   * a key this function has already computed — and a second place for it to be computed
+   * differently. The key is opaque to the caller; `targetByKey` is the only thing that reads it.
    */
-  note(hit: StanceLedgerHit): void {
-    if (hit.amount <= 0) return
+  note(hit: StanceLedgerHit): string | null {
+    if (hit.amount <= 0) return null
     const mobKey = idKey(hit.mobName)
     const { base, tier } = zoneTier(hit.zone ?? '')
     const key = rowKey(mobKey, base, tier)
@@ -180,6 +200,20 @@ export class StanceLedger {
     // would have been without your stance is a different number and belongs to the advice layer.
     if (hit.amount > row.biggestHit) row.biggestHit = hit.amount
     if (hit.ts > row.lastSeenTs) row.lastSeenTs = hit.ts
+    return key
+  }
+
+  /**
+   * ONE target, by the key `note()` just returned — the advisor's read.
+   *
+   * Separate from `targets()` because that one copies EVERY row (the whole session's bestiary)
+   * to answer a question about one mob, and this read happens inside the fold. It is still a
+   * full copy of the row it names: the advisor hands the profile to shared code that must not
+   * be able to reach back into engine state.
+   */
+  targetByKey(key: string): TargetProfile | undefined {
+    const row = this.rows.get(key)
+    return row ? toProfile(row) : undefined
   }
 
   /**
@@ -192,17 +226,7 @@ export class StanceLedger {
    */
   targets(): TargetProfile[] {
     const out: TargetProfile[] = []
-    for (const row of this.rows.values()) {
-      out.push({
-        mobKey: row.mobKey,
-        mobName: row.mobName,
-        zoneBase: row.zoneBase,
-        tier: row.tier,
-        samples: [...row.samples.values()].map((s) => ({ ...s })),
-        lastSeenTs: row.lastSeenTs,
-        biggestHit: row.biggestHit
-      })
-    }
+    for (const row of this.rows.values()) out.push(toProfile(row))
     return out.sort((a, b) => b.lastSeenTs - a.lastSeenTs)
   }
 

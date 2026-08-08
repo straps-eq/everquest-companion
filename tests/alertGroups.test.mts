@@ -15,6 +15,14 @@
 // support (feign-death failure, pet death) must stay unverified and unoffered, and the rank
 // suggestion templates must fire on the rank-suffixed lines they were built from.
 //
+// ONE GROUP QUOTES NO LINE, and it is the exception the refusal register predicted. "Wrong
+// stance for this mob" fires on the DERIVED `stanceMismatch` event the combat engine
+// synthesizes — the thing alertGroupsRefused.ts's "Pet died" entry said would be needed before
+// an entity-bound alert could ship. Its spec carries `derived: true` and `observed: 0`, and G1
+// proves it by feeding the app's own synthesized event through the real module instead of a
+// parsed line. Everything else in the catalog still quotes a counted sentence; G8 pins that the
+// exemption stays exactly one flag wide.
+//
 // Run: `npm test`.
 
 import { test } from 'node:test'
@@ -27,10 +35,13 @@ import {
   ALERT_GROUPS,
   GROUP_SOUND_IDS,
   VERIFIED_ALERT_GROUPS,
-  alertGroupDefs
+  alertGroupDefs,
+  type AlertGroupDefSpec
 } from '../src/shared/alertGroups'
 import { REQUIRED_SOUND_IDS } from '../src/main/data/defaultPacks'
+import { detectMismatch, stanceMismatchEvent, type TargetProfile } from '../src/shared/stanceAdvice'
 import type { AlertDef } from '../src/shared/types'
+import type { LogEvent } from '../src/shared/logEvents'
 
 const TS = '[Tue Jul 28 13:04:53 2026] '
 
@@ -42,17 +53,24 @@ const TS = '[Tue Jul 28 13:04:53 2026] '
 // global injection cannot reach another suite.
 installSpellDb(loadSpellDb())
 
-/** Feed raw log lines through the real parser into a module holding `defs`; return fired ids. */
-function fire(defs: AlertDef[], lines: string[]): Set<string> {
+/** Feed already-built events into a module holding `defs`; return fired ids. */
+function fireEvents(defs: AlertDef[], events: LogEvent[]): Set<string> {
   const mod = new AlertsModule()
   mod.setDefs(defs)
   mod.reset()
+  for (const ev of events) mod.onEvent(ev, true)
+  return new Set((mod.flushDelta()?.delta.fired ?? []).map((f) => f.alertId))
+}
+
+/** Feed raw log lines through the real parser into a module holding `defs`; return fired ids. */
+function fire(defs: AlertDef[], lines: string[]): Set<string> {
+  const events: LogEvent[] = []
   let seq = 0
   for (const line of lines) {
     const ev = parseEvent(line, seq++)
-    if (ev) mod.onEvent(ev, true)
+    if (ev) events.push(ev)
   }
-  return new Set((mod.flushDelta()?.delta.fired ?? []).map((f) => f.alertId))
+  return fireEvents(defs, events)
 }
 
 /**
@@ -95,17 +113,59 @@ const VERIFIED_LINES: Record<string, string[]> = {
   'group:tells:received': ["Tellwyn tells you, 'group up?'"]
 }
 
+/**
+ * THE ONE FAMILY THAT HAS NO LINE TO QUOTE — defs that fire on a DERIVED event.
+ *
+ * `AlertGroupDefSpec.derived` marks them and states the argument: the sentence is written by
+ * this repo rather than by EQ, so it cannot be a wrong guess about the game's wording, and it
+ * is still proven end to end — here (the synthesized event through the real AlertsModule) and,
+ * from the engine's own fold over a committed fixture, in tests/stanceMismatchAlert.test.mts.
+ *
+ * The event is built through the SAME shared constructor the engine uses
+ * (`stanceMismatchEvent`), off a mismatch `detectMismatch` actually returned, so this cannot
+ * pass against a shape the app never emits.
+ */
+function derivedEventsFor(defId: string): LogEvent[] {
+  if (defId !== 'group:stance:mismatch') return []
+  const target: TargetProfile = {
+    mobKey: 'cazic-thule',
+    mobName: 'Cazic-Thule',
+    zoneBase: 'The Plane of Fear',
+    tier: 2,
+    // Melee-heavy, measured from inside Mage Hunter: Defensive is the answer.
+    samples: [{ stanceKey: 'mage hunter', physical: 8000, magical: 400, hits: 120 }],
+    lastSeenTs: Date.parse('2026-07-28T13:04:53Z'),
+    biggestHit: 404
+  }
+  const m = detectMismatch(target, ['balanced', 'defensive', 'mage hunter', 'offensive'], 'mage hunter')
+  assert.ok(m, 'the fixture profile must actually be a mismatch, or this proves nothing')
+  return [stanceMismatchEvent(m, 1, target.lastSeenTs)]
+}
+
+/** One def must fire on every input it claims: its quoted line(s), or — for a derived def —
+ *  the event the app itself synthesizes. `defs` is the whole group, so a def that fires on
+ *  another's input still fails the id check. */
+function assertFires(defs: AlertDef[], spec: AlertGroupDefSpec): void {
+  if (spec.derived) {
+    // No parser is involved because no line exists: the event IS the input.
+    const events = derivedEventsFor(spec.id)
+    assert.ok(events.length > 0, `${spec.id} is derived but no synthesized event is recorded`)
+    for (const ev of events) {
+      assert.ok(fireEvents(defs, [ev]).has(spec.id), `${spec.id} did not fire on its own event`)
+    }
+    return
+  }
+  const lines = VERIFIED_LINES[spec.id]
+  assert.ok(lines, `no verified line recorded for ${spec.id} — do not ship an unproven trigger`)
+  for (const text of lines) {
+    assert.ok(fire(defs, [TS + text]).has(spec.id), `${spec.id} did not fire on: ${text}`)
+  }
+}
+
 test('G1 every verified group def fires on its quoted real log line', () => {
   for (const group of VERIFIED_ALERT_GROUPS) {
     const defs = alertGroupDefs(group).map((d) => ({ ...d, cooldownMs: 0 }))
-    for (const def of defs) {
-      const lines = VERIFIED_LINES[def.id]
-      assert.ok(lines, `no verified line recorded for ${def.id} — do not ship an unproven trigger`)
-      for (const text of lines) {
-        const fired = fire(defs, [TS + text])
-        assert.ok(fired.has(def.id), `${def.id} did not fire on: ${text}`)
-      }
-    }
+    for (const spec of group.defs) assertFires(defs, spec)
   }
 })
 
@@ -161,6 +221,26 @@ test('G4 the unverifiable groups stay unoffered, with the reason recorded', () =
     assert.equal(g.defs.length, 0, `${g.id} must ship NO defs — a guessed regex is worse than none`)
     assert.ok((g.unverifiedReason ?? '').length > 80, `${g.id} must document why`)
     assert.ok(!VERIFIED_ALERT_GROUPS.includes(g), `${g.id} must not reach the UI`)
+  }
+})
+
+test('G8 the derived exemption is exactly one flag wide', () => {
+  // The law this file enforces is "quote a real line with a real count". Exactly one kind of def
+  // is exempt — one that fires on an event this repo synthesizes — and it must SAY so, so the
+  // exemption can never be taken by accident (or by a def whose author could not find a line).
+  for (const group of ALERT_GROUPS) {
+    for (const spec of group.defs) {
+      if (spec.derived) {
+        // No line exists, so no count can: 0 is the honest number and the trigger must be an
+        // event (a raw regex over a line nobody ever prints could only be a mistake).
+        assert.equal(spec.observed, 0, `${spec.id} is derived, so its log-line count must be 0`)
+        assert.equal('type' in spec.trigger ? spec.trigger.type : '', 'event', `${spec.id} must bind an event`)
+        assert.ok((spec.note ?? '').length > 80, `${spec.id} must explain what it is derived from`)
+        continue
+      }
+      assert.ok(spec.observed > 0, `${spec.id} quotes a line nobody counted`)
+      assert.ok(spec.line.length > 0, `${spec.id} quotes no line at all`)
+    }
   }
 })
 

@@ -27,6 +27,11 @@ import {
   rankStances,
   unmitigate
 } from './stances'
+// TYPE-ONLY, and deliberately so: `StanceMismatchEvent` below extends the shared event base, and
+// logEvents.ts imports THAT type back for its union. `import type` is erased at compile time, so
+// the pair is a type-level cycle and never a runtime one — the same construction alertGroups.ts
+// and alertGroupsRefused.ts use, for the same reason.
+import type { LogEventBase } from './logEvents'
 
 /** Landed damage against you from one target, while wearing one stance. */
 export interface StanceSample {
@@ -211,4 +216,118 @@ export function detectMismatch(
     bestFraction: best.fraction,
     gain
   }
+}
+
+// ── THE DERIVED EVENT ───────────────────────────────────────────────────────────────────────
+//
+// WHY THE EVENT LIVES HERE AND NOT IN logEvents.ts. Two reasons, and the second is the honest
+// one. (1) This is where the claim is DECIDED — `detectMismatch` above produces the only thing
+// that can populate it, and a shape that can only be built by one function belongs beside that
+// function. (2) logEvents.ts stands at 392 of the 400-code-line factoring ceiling, so the
+// alternative was to grow the file past a limit the repo enforces rather than exempt. The union
+// in logEvents.ts imports the type back; both directions are `import type`, so nothing about the
+// module graph changes at runtime.
+//
+// WHY THERE IS AN EVENT AT ALL — alertGroupsRefused.ts wrote the rule down for "Pet died": an
+// AlertDef "matches text, not entities … needs a derived event before it can ship". A suboptimal
+// stance is exactly that shape and worse: the log never prints one sentence about it. It is a
+// JOIN over the mob's measured damage profile, the wiki's multipliers and the stance worn right
+// now, so the ENGINE decides it (main/combat/stanceAdvisor.ts owns WHEN) and the alert binds to
+// the result. No regex over any log line could ever express it.
+
+/**
+ * "You are in a materially worse stance than the measurement supports, against THIS mob."
+ *
+ * Synthesized by the combat engine, handed to the bus through `emitDerived` (the same path
+ * `buffExpired`, `epoch` and `offlineGap` take), matched by the alerts module like any other
+ * event. Every field is DERIVED — nothing here was printed by the game, which is why `raw` says
+ * so out loud (see `stanceMismatchEvent`).
+ */
+export interface StanceMismatchEvent extends LogEventBase {
+  kind: 'stanceMismatch'
+  /** The mob whose measured profile produced this, display spelling. Also the alert's `target`
+   *  field, so `cooldownScope:'target'` scopes a clock per mob without extra machinery. */
+  target: string
+  /** Zone base name (tier suffix stripped), or '' when nothing has printed a zone line yet. */
+  zone: string
+  /** Instance difficulty, 0..4 — a d0 Cazic-Thule is not a d2 one and they never pooled. */
+  tier: number
+  /** Lowercase key of the stance worn at this instant. Never '' — a mismatch needs a stance. */
+  stance: string
+  /** Lowercase key of the stance the measurement recommends instead. */
+  best: string
+  /**
+   * Whole percent LESS damage `best` would take than `stance`, RELATIVE to what is being taken
+   * now — the number a human means by "38% less". `MIN_GAIN` gates the ABSOLUTE difference
+   * between the two fractions, which is a different (and always smaller) quantity; both come
+   * from the same two numbers, and this is the one the sentence states.
+   */
+  lessPct: number
+  /** Pooled landed hits behind the claim. Never below MIN_CONFIDENT_HITS — detectMismatch's gate. */
+  hits: number
+}
+
+/** Display name for a stance key ('mage hunter' → 'Mage Hunter'), or the key when unknown. */
+function stanceName(key: string): string {
+  return STANCE_EFFECTS[key]?.name ?? key
+}
+
+/**
+ * THE SENTENCE, and it is the alert's whole user-facing copy: `raw` is what the recent-fires
+ * panel and the event feed show. (No speech mode reads it — shared/speechText.ts only ever
+ * speaks the alert's name, a spell name or a custom phrase — so length here buys honesty at no
+ * cost to the ears.)
+ *
+ * Four rules it follows:
+ *   * NAME THE THING. The mob, the stance to switch to, the stance worn, the measured gain and
+ *     the sample size behind it. "You might want a different stance" is not worth interrupting
+ *     a fight for; "Cazic-Thule: Defensive would take 38% less than Mage Hunter" is.
+ *   * SAY WHERE. The measurement is scoped to (mob, zone, tier) and the tier is part of that
+ *     identity, so a d2 claim never reads as a claim about the d0 fight. The zone clause is
+ *     dropped entirely when the ledger's row has no zone (a session that began mid-zone) rather
+ *     than printed as an empty one — an absent fact, stated as absent.
+ *   * CARRY THE ASTERISK THE MATHS CANNOT. `stances.ts` says it outright: Evasive's 0.05 is
+ *     "arithmetically dominant and practically unverified … any surface that ranks it first has
+ *     to say so", because the game charges endurance for every point evaded and THE LOG NEVER
+ *     PRINTS ENDURANCE. So when the winner is endurance-gated the sentence says so. This is not
+ *     a second opinion about the ranking — `detectMismatch` decided it and this states exactly
+ *     what it decided — it is the flag `StanceEffect.enduranceGated` exists to be surfaced by.
+ *   * NEVER IMPERSONATE THE GAME. Every other alert in the app quotes a sentence EQ printed.
+ *     This one cannot, so it says whose opinion it is (world-model law 1: anything inferred is
+ *     labeled). A user who reads this must not go looking for the line in their log.
+ */
+export function stanceMismatchLine(ev: Omit<StanceMismatchEvent, 'kind' | 'seq' | 'ts' | 'raw'>): string {
+  const where = ev.zone ? ` in ${ev.zone}${ev.tier > 0 ? ` d${ev.tier}` : ''}` : ''
+  const best = stanceName(ev.best)
+  const gated = STANCE_EFFECTS[ev.best]?.enduranceGated
+    ? ` ${best} can fail outright when endurance runs out, and the log never shows endurance.`
+    : ''
+  return (
+    `Stance advice — ${ev.target}${where}: ${best} would take ${ev.lessPct}% less than ` +
+    `${stanceName(ev.stance)}, measured over ${ev.hits} landed hits this session.${gated} ` +
+    `Derived by this app from your own damage taken — the game never says this.`
+  )
+}
+
+/**
+ * Build the derived event from a mismatch the engine just decided.
+ *
+ * The ONLY constructor, so the wire fields and the sentence can never disagree: `lessPct` is
+ * computed once and the line is rendered from the same object that goes on the bus. `seq`/`ts`
+ * are the PRIMARY event's — the incoming hit that triggered the evaluation — exactly as the
+ * buffs module stamps `buffExpired`, so the derived event slots into the stream coherently.
+ */
+export function stanceMismatchEvent(m: StanceMismatch, seq: number, ts: number): StanceMismatchEvent {
+  const fields = {
+    target: m.target.mobName,
+    zone: m.target.zoneBase,
+    tier: m.target.tier,
+    stance: m.currentKey,
+    best: m.bestKey,
+    // Relative to what you take NOW, not to the un-mitigated total: currentFraction is > 0 for
+    // every stance in the table (the smallest multiplier in the game is Evasive's 0.05).
+    lessPct: Math.round((m.gain / m.currentFraction) * 100),
+    hits: m.advice.hits
+  }
+  return { kind: 'stanceMismatch', seq, ts, raw: stanceMismatchLine(fields), ...fields }
 }

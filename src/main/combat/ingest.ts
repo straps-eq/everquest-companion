@@ -201,6 +201,10 @@ function ingestWorld(st: EngineState, ev: LogEvent): boolean {
       // another one's damage, so the ledger is CLEARED rather than censored — unlike a span,
       // a damage sum has no honest truncated form.
       st.stanceLedger.reset()
+      // …and the advice throttle in front of it. Its arms say "we already told THIS character
+      // about that mob"; after a rebirth that is a sentence about somebody else, and leaving it
+      // standing would silence the first real advice the new character earns.
+      st.stanceAdvisor.reset()
       return true
     }
     case 'zone': {
@@ -253,6 +257,22 @@ function ingestWorld(st: EngineState, ev: LogEvent): boolean {
     default:
       return false
   }
+}
+
+/**
+ * The two things the engine's internal `DamageEvent` deliberately DROPS from the canonical
+ * LogEvent, carried alongside for the one consumer that needs them.
+ *
+ * `DamageEvent` (aggregate.ts) is the meter's record: amounts, types, names. It has no `seq`
+ * because no aggregate has ever needed one, and `live` was never in it because the fold is
+ * identical either way. The stance advisor needs both — `seq` to stamp the derived event it may
+ * emit (the same stamping contract buffs.ts's `buffExpired` follows) and `live` because it is
+ * inert during replay. Bundled as one argument rather than two so the fold stays inside the
+ * four-parameter factoring limit, and because they always travel together.
+ */
+interface FeedStamp {
+  seq: number
+  live: boolean
 }
 
 /** The engine's internal damage record for a canonical `damage` LogEvent (attacker already
@@ -395,12 +415,17 @@ function foldHealAnalytics(st: EngineState, ev: HealEvent): void {
  * with "a fetid fiend (14)" as two different mobs would shred every profile in the zone.
  *
  * The stance is read off `EngineState`, which owns it — never re-parsed here.
+ *
+ * THE ADVISOR RIDES THE SAME CALL (stanceAdvisor.ts). It is handed the row the ledger just wrote
+ * — never a second derivation of the same key — and it decides, under a hard throttle, whether
+ * this is the moment to emit the derived `stanceMismatch` event. It is inert during replay and
+ * inert until pipeline.ts installs its deps, so nothing about the historical fold moves.
  */
-function foldStanceLedger(st: EngineState, ev: DamageEvent, at: Attribution): void {
+function foldStanceLedger(st: EngineState, ev: DamageEvent, at: Attribution, feed: FeedStamp): void {
   if (at.kind !== 'incoming') return
   const p = st.probe
   if (p) p.enter(SEC_ANALYTICS)
-  st.stanceLedger.note({
+  const rowKey = st.stanceLedger.note({
     mobName: ev.attacker,
     zone: st.zone,
     stance: st.stance?.name,
@@ -408,6 +433,15 @@ function foldStanceLedger(st: EngineState, ev: DamageEvent, at: Attribution): vo
     amount: ev.amount,
     ts: ev.ts
   })
+  if (rowKey !== null) {
+    st.stanceAdvisor.consider(st.stanceLedger, {
+      rowKey,
+      stanceKey: (st.stance?.name ?? '').toLowerCase(),
+      ts: ev.ts,
+      seq: feed.seq,
+      live: feed.live
+    })
+  }
   if (p) p.leave()
 }
 
@@ -446,7 +480,7 @@ function nameSpecialLane(st: EngineState, ev: DamageEvent): DamageEvent {
 }
 
 /** One canonical `damage` line: route it, then index it. */
-function ingestDamage(st: EngineState, ev: DamageEventE): void {
+function ingestDamage(st: EngineState, ev: DamageEventE, live: boolean): void {
   // Caster-less other-player DoTs (attacker:null) are not our fight.
   if (ev.attacker === null) {
     st.log(ev.ts, 'other', 'dropped', ev.raw)
@@ -465,14 +499,14 @@ function ingestDamage(st: EngineState, ev: DamageEventE): void {
   if (at === null) return
   const delta = st.current === encBefore ? (st.current?.activeMs ?? 0) - activeBefore : 0
   foldDamageAnalytics(st, dmgEv, delta, at)
-  foldStanceLedger(st, dmgEv, at)
+  foldStanceLedger(st, dmgEv, at, { seq: ev.seq, live })
 }
 
 /** damage / heal / mitigation / miss / resist. Returns true if consumed. */
-function ingestCombat(st: EngineState, ev: LogEvent): boolean {
+function ingestCombat(st: EngineState, ev: LogEvent, live: boolean): boolean {
   switch (ev.kind) {
     case 'damage':
-      ingestDamage(st, ev)
+      ingestDamage(st, ev, live)
       return true
     case 'heal':
       routeHeal(st, ev)
@@ -662,7 +696,11 @@ function ingestOne(st: EngineState, ev: LogEvent, live: boolean): void {
   // first. Guarded on an empty-map read, so the ordinary line costs nothing.
   st.sweepCharm(ev.ts)
   if (ingestWorld(st, ev)) return
-  if (ingestCombat(st, ev)) return
+  // `live` reaches exactly one thing inside this family: the stance advisor, which is inert
+  // during the historical scan (stanceAdvisor.ts's header says why). Threaded rather than read
+  // off `st.recording` — that flag is a near-proxy for liveness, and "near" is how a replay of
+  // 1.4M lines would end up making sounds.
+  if (ingestCombat(st, ev, live)) return
   if (ingestCast(st, ev)) return
   if (ingestChoice(st, ev)) return
   ingestModifier(st, ev)

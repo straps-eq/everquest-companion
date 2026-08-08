@@ -61,6 +61,7 @@
 import { EngineState } from './state'
 import { ingestEvent } from './ingest'
 import type { EngineFoldProbe } from './foldProbe'
+import type { StanceAdvisorDeps } from './stanceAdvisor'
 import { encSummary, evalClosure, zoneSessionSummaries, zoneSummary } from './lifecycle'
 import { buildSelected, buildTimeline } from './segmentViews'
 import { searchFights } from './fightSearch'
@@ -203,6 +204,20 @@ export class CombatEngine {
    *  session. Lowercase because that is the key `STANCE_EFFECTS` and `detectMismatch` want. */
   currentStanceKey(): string | null {
     return this.st.stance ? this.st.stance.name.toLowerCase() : null
+  }
+
+  /**
+   * Install the DERIVED STANCE-MISMATCH path (stanceAdvisor.ts) — the loadout pull and the bus
+   * sink the advisor needs to be anything other than inert.
+   *
+   * A seam like `setRoster` above and for the same reasons: the two facts it needs are owned by
+   * other parts of the app (the combo module infers the class loadout; the bus belongs to
+   * pipeline.ts) and the engine must not reach for either. Absent — every test that does not ask
+   * for it, and the replay bench — the engine folds exactly as it did before this existed:
+   * `consider()` returns on its first line.
+   */
+  setStanceAdvisor(deps: StanceAdvisorDeps): void {
+    this.st.stanceAdvisor.install(deps)
   }
 
   /**

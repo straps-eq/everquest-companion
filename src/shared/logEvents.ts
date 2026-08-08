@@ -7,6 +7,16 @@
 
 import type { DamageType, DamageCategory } from './combat'
 import type { PoisonEffect, PoisonGroup } from './poisons'
+// THE DERIVED STANCE MISMATCH is declared in shared/stanceAdvice.ts — beside `detectMismatch`,
+// the only function able to build one — and imported back here for the union at the bottom.
+// Two reasons it is not written out in this file: the decision and its wire shape belong
+// together, and this file stands at 392 of the 400-code-line factoring ceiling (growing past a
+// limit the repo enforces is not something a new event kind gets to do). BOTH directions are
+// `import type`, so the pairing is erased at compile time and there is no runtime cycle — the
+// same construction alertGroups.ts and alertGroupsRefused.ts use.
+import type { StanceMismatchEvent } from './stanceAdvice'
+
+export type { StanceMismatchEvent }
 
 /** Fields present on every event: a monotonic sequence, timestamp, and the raw line. */
 export interface LogEventBase {
@@ -1243,4 +1253,8 @@ export type LogEvent =
   | PoisonProcEvent
   | PoisonCoatEvent
   | PoisonDryEvent
+  // DERIVED, and it is the first event in this union that no log line can produce: the engine
+  // JOINs the mob's measured damage profile, the wiki's stance multipliers and the stance you
+  // are wearing (shared/stanceAdvice.ts declares it; main/combat/stanceAdvisor.ts decides when).
+  | StanceMismatchEvent
   | UnknownEvent

@@ -86,7 +86,17 @@ const SOUND = {
    */
   tellReceived: 'input-required-input-required-04',
   /** "There. Tied with a neat little bow." — something worth stopping for hit your bags. */
-  moteLooted: 'task-complete-task-complete-10'
+  moteLooted: 'task-complete-task-complete-10',
+  /**
+   * "I have devised a plan. Do let me know what you think." — the stance recommendation.
+   *
+   * CHOSEN FOR ITS GRAMMAR, not its category. Every other line in this table reports something
+   * the GAME did; this one is the app offering an opinion for the user to accept or ignore,
+   * which is precisely what a derived claim is (see the group below, and world-model law 1).
+   * A line that sounded like a game notification would be the audio version of pretending the
+   * log said this.
+   */
+  stanceAdvice: 'task-acknowledge-task-acknowledge-01'
 } as const
 
 /** Every group sound id, for the defaultPacks.ts cross-check + provisioning verification. */
@@ -109,6 +119,23 @@ export interface AlertGroupDefSpec {
   line: string
   /** how many times that shape occurs in the reference log (provenance, not a threshold). */
   observed: number
+  /**
+   * TRUE when this def fires on a DERIVED event rather than on a log line — the ONE exemption
+   * from this file's quoted-line law, and it is narrower than it looks.
+   *
+   * The law exists because a guessed regex that never fires is worse than an absent feature. A
+   * derived def cannot be guessed: the event is synthesized by code in this repo, so the shape
+   * is not a hypothesis about EQ's wording, it is a fact about our own emitter — and it is
+   * tested end to end (tests/alertGroups.test.mts G1 feeds the synthesized event through the
+   * real AlertsModule, and tests/stanceMismatchAlert.test.mts drives the real engine over a
+   * committed fixture to produce one).
+   *
+   * When it is set, `line` is the SHAPE of the sentence the app synthesizes (placeholders, like
+   * the resists and tells defs already use) and `observed` is 0 — not "we did not count", but
+   * "this sentence occurs zero times in any log, by construction". A surface that renders the
+   * count should read this flag and say where the alert comes from instead.
+   */
+  derived?: boolean
   /**
    * A SECOND verified line the same def fires on, for a trigger that covers two shapes. Same
    * law as `line`: quoted verbatim from the real log with its own measured count, or absent.
@@ -670,6 +697,66 @@ export const ALERT_GROUPS: AlertGroup[] = [
         note:
           'Player tells only. NPC and pet tells use the past tense ("told you") and never fire ' +
           'this; neither do channel tells, group chat, or the tells you send.'
+      }
+    ]
+  },
+  {
+    // THE ONE SET IN THIS FILE THAT NO LOG LINE CAN FIRE — and the reason it ships anyway is
+    // written down in alertGroupsRefused.ts, in the "Pet died" entry: an AlertDef "matches text,
+    // not entities … Needs a derived event before it can ship." This is what that sentence
+    // looks like when somebody builds the derived event.
+    //
+    // The claim — "the mob hitting you would hurt less in another stance" — is a JOIN, not a
+    // line: the mob's measured damage profile (main/combat/stanceLedger.ts, counted per stance
+    // so the measurement can be un-biased), the wiki's stance multipliers (shared/stances.ts)
+    // and the stance worn at this instant. EQ prints no sentence about any of it, and no regex
+    // over any log line could ever reach it. So the ENGINE decides it and emits
+    // `stanceMismatch` (main/combat/stanceAdvisor.ts → shared/stanceAdvice.ts), and this def
+    // binds to that event exactly the way the wears-off defs bind to the derived `buffExpired`.
+    id: 'stance',
+    title: 'Wrong stance for this mob',
+    subtitle: 'What is hitting you would hurt measurably less in a stance you can wear.',
+    verified: true,
+    defs: [
+      {
+        // COOLDOWN 60s, AND IT IS THE LAST BOUND RATHER THAN THE ONLY ONE. Every other def in
+        // this file fires on a discrete line, so its cooldown is the whole rate limit. This
+        // condition is CONTINUOUSLY TRUE for as long as the fight lasts — it would be re-decided
+        // on every incoming hit, hundreds per pull — so the real throttle is at the source: one
+        // event per (mob, zone, tier, recommended stance) per ENGAGEMENT, re-armed only when the
+        // player actually changes stance or the engagement ends (stanceAdvisor.ts states both
+        // rules and the measurements behind the windows). A minute here is what collapses the
+        // remaining case the engine cannot: two different mobs advising in the same breath.
+        //
+        // ALERT-SCOPED, not per-target, and that is the opposite of the rogue-slow def's choice
+        // for a reason. There, per-mob scope existed so a re-land on the mob you are already
+        // fighting could not mute the FIRST slow on the mob you pull next. Here the source
+        // throttle already guarantees a fresh mob's first advice is never suppressed by an old
+        // mob's, so a per-target clock would only allow more noise, not less.
+        id: 'group:stance:mismatch',
+        name: 'A better stance for this mob',
+        trigger: { type: 'event', kind: 'stanceMismatch' },
+        soundId: SOUND.stanceAdvice,
+        cooldownMs: 60_000,
+        derived: true,
+        // THE SHAPE OF THE SENTENCE THE APP SYNTHESIZES (shared/stanceAdvice.ts
+        // `stanceMismatchLine` builds it, and is the single writer). Placeholders rather than
+        // one frozen example, the convention the resists and tells defs already use — and here
+        // it also keeps this file from implying the numbers are fixed.
+        line:
+          'Stance advice — <mob> in <zone> d<tier>: <stance> would take <N>% less than <worn>, ' +
+          'measured over <hits> landed hits this session. Derived by this app from your own ' +
+          'damage taken — the game never says this.',
+        // ZERO BY CONSTRUCTION, not un-counted: this sentence occurs in no log, ever, because
+        // the app is the thing that writes it. See `derived` on AlertGroupDefSpec.
+        observed: 0,
+        note:
+          'DERIVED, not a game message: the app compares what this mob has actually hit you ' +
+          'with against the stances your classes can wear. It waits for a real sample (40+ ' +
+          'landed hits pooled across the stances you wore) and stays quiet unless the switch is ' +
+          'worth at least a tenth of the damage — so a fight you are already handling well says ' +
+          'nothing. It speaks at most once per mob per fight, and again only if you change ' +
+          'stance. A d0 and a d2 version of the same mob are measured separately.'
       }
     ]
   },

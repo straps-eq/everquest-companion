@@ -161,6 +161,11 @@ export function finalizeCurrent(st: EngineState): void {
   if (!st.current) return
   const enc = st.current
   st.current = null
+  // THE ENGAGEMENT ENDED, so the stance advisor may speak about these mobs again (its header
+  // states the rule). Before the empty-encounter early return below, because a pull that closed
+  // without ever accruing damage is still a pull that ended — and because the advisor's own
+  // per-target idle window must never be the ONLY thing that re-arms it.
+  st.stanceAdvisor.onEngagementEnd()
   // Close any open stance/invocation spans at the fight's end (Task #51).
   for (const s of enc.stanceSpans) s.end ??= enc.lastTs
   // Drop empty encounters: a CC application (or a lone miss) can open an encounter
