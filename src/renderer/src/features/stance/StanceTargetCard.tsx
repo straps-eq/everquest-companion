@@ -1,6 +1,11 @@
-// ONE TARGET, ONE CARD: what this mob hits you with, and which stance to be in against it.
+// ONE TARGET, ONE PANEL: what this mob hits you with, and which stance to be in against it.
 //
-// The card decides nothing — every string, fraction and caveat on it was built by stanceRows.ts
+// This is now the DETAIL half of a master/detail page — StanceView.tsx shows exactly one of these
+// at a time, for the target the selector has open — where it used to be one of up to twenty cards
+// stacked down the page. Nothing about what it says changed; what changed is that it is the only
+// thing saying it, which is what buys the room for the charts.
+//
+// The panel decides nothing — every string, fraction and caveat on it was built by stanceRows.ts
 // out of the shared advice layer. What lives here is the ORDER, and the order is an argument:
 //
 //   1. the mismatch callout, when there is one — it is the only thing here that is urgent;
@@ -11,9 +16,15 @@
 //      source-caveating, it is the finding);
 //   3. the recommendation — `advice.sustained`, the stance you actually wear;
 //   4. survive mode — `advice.emergency`, deliberately separate and deliberately quieter;
-//   5. the damage composition, which is the evidence for 3 and 4;
-//   6. the full ranking, as bars;
-//   7. the raw observations, collapsed.
+//   5. the stance comparison chart — the page's central claim, and now its real chart
+//      (StanceCharts.tsx). It kept the `stance-rank-row` testid the DOM bar list it replaced had;
+//   6. the damage composition, which is the evidence for 3 and 4, as a donut;
+//   7. observed-vs-recovered, which is the evidence for 6 (StanceRecoveryChart.tsx);
+//   8. the raw observations, collapsed.
+//
+// 5 MOVED ABOVE 6. The ranking used to sit under the composition because it was a list; as the
+// chart it is the answer's own picture and belongs directly under the answer, with the two
+// evidence charts below the divider that separates "what to do" from "how we know".
 //
 // ── ON VOLUME ───────────────────────────────────────────────────────────────────────────────
 //
@@ -32,14 +43,12 @@ import WarningAmberIcon from '@mui/icons-material/WarningAmber'
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
 import { Tooltip } from '../../lib/Tooltip'
 import { formatAge } from '../../lib/formatDate'
-import { formatNum } from '../../lib/formatRate'
 import { tierStyle } from '../../lib/tierChip'
+import { StanceComparisonChart } from './StanceCharts'
+import { RecoverySamplesChart } from './StanceRecoveryChart'
 import { DamageBreakdown, Observations } from './StanceEvidence'
-import { HOLD_COLOR, Recommendation, SURVIVE_COLOR, SurviveMode } from './StanceRecommendation'
-import { caveatsAt, mismatchLine, type RankedRow, type StanceCaveat, type StanceTargetRow } from './stanceRows'
-
-/** A ranked row that is neither the pick nor the escape hatch: present, measured, not the answer. */
-const NEUTRAL_COLOR = '#8891a0'
+import { Recommendation, SURVIVE_COLOR, SurviveMode } from './StanceRecommendation'
+import { caveatsAt, mismatchLine, type StanceCaveat, type StanceTargetRow } from './stanceRows'
 
 /** Theme `secondary.main` (theme.ts) — the "there is no answer, here is why" blue. */
 const INFO_COLOR = '#6fb3d2'
@@ -63,80 +72,6 @@ function CardHeader({ row }: { row: StanceTargetRow }): JSX.Element {
         last hit you {formatAge(row.lastSeenTs)}
       </Typography>
     </Stack>
-  )
-}
-
-/**
- * One stance in the ranking, as a proportional bar.
- *
- * The bar's WIDTH is the damage you would take, so shorter is better and the shape of the whole
- * list is readable without reading a single number. Color carries the split rather than the
- * order: green is the stance to hold, amber is survive mode, everything else is grey. Nothing
- * about `ranked[0]` is emphasised — it is Evasive on nearly every card, and the point of the
- * whole exercise is that the list's arithmetic winner is not the page's answer.
- */
-function RankRow({ r }: { r: RankedRow }): JSX.Element {
-  const color = r.recommended ? HOLD_COLOR : r.emergency ? SURVIVE_COLOR : NEUTRAL_COLOR
-  const tag = r.recommended ? 'hold this' : r.emergency ? 'survive only' : r.free ? 'no upkeep' : ''
-  return (
-    <Box
-      data-testid="stance-rank-row"
-      sx={{
-        position: 'relative',
-        height: 20,
-        borderRadius: 0.5,
-        overflow: 'hidden',
-        bgcolor: 'rgba(255,255,255,0.04)',
-        outline: r.current ? `1px solid ${alpha(NEUTRAL_COLOR, 0.9)}` : 'none'
-      }}
-    >
-      {/* A floor of 2%, so Evasive's 5% is still a visible sliver rather than nothing at all. */}
-      <Box
-        sx={{
-          position: 'absolute',
-          inset: 0,
-          width: `${String(Math.max(2, Math.round(r.fraction * 1000) / 10))}%`,
-          bgcolor: color,
-          opacity: 0.35
-        }}
-      />
-      <Box sx={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, bgcolor: color }} />
-      <Stack direction="row" alignItems="center" spacing={0.75} sx={{ position: 'absolute', inset: 0, pl: '9px', pr: 0.75 }}>
-        <Typography variant="caption" noWrap sx={{ fontWeight: r.recommended ? 700 : 500, minWidth: 88 }}>
-          {r.name}
-        </Typography>
-        {r.current && <Chip size="small" color="primary" label="worn" sx={{ height: 15, fontSize: 9 }} />}
-        {tag && (
-          <Typography variant="caption" sx={{ color, fontSize: 10, fontWeight: 700, whiteSpace: 'nowrap' }}>
-            {tag}
-          </Typography>
-        )}
-        <Box sx={{ flexGrow: 1 }} />
-        <Typography variant="caption" color="text.secondary" sx={{ fontSize: 10, whiteSpace: 'nowrap' }}>
-          {formatNum(r.expected)}
-        </Typography>
-        <Typography variant="caption" sx={{ fontWeight: 700, minWidth: 30, textAlign: 'right' }}>
-          {r.percent}
-        </Typography>
-      </Stack>
-    </Box>
-  )
-}
-
-/** The full ranking — honest arithmetic, kept visible, drawn so it does not read as the answer. */
-function Ranking({ row }: { row: StanceTargetRow }): JSX.Element | null {
-  if (row.ranked.length === 0) return null
-  return (
-    <Box>
-      <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.35 }}>
-        Every stance you can wear, by damage taken — raw arithmetic, endurance not included
-      </Typography>
-      <Stack spacing={0.35}>
-        {row.ranked.map((r) => (
-          <RankRow key={r.key} r={r} />
-        ))}
-      </Stack>
-    </Box>
   )
 }
 
@@ -248,10 +183,11 @@ export default function StanceTargetCard({ row }: { row: StanceTargetRow }): JSX
         <CaveatBanners caveats={row.caveats} />
         <Recommendation row={row} />
         <SurviveMode row={row} />
+        <StanceComparisonChart row={row} />
         <Divider flexItem sx={{ opacity: 0.5 }} />
         <DamageBreakdown row={row} />
         <CorrectionLine row={row} />
-        <Ranking row={row} />
+        <RecoverySamplesChart row={row} />
         <Observations row={row} />
       </Stack>
     </Paper>

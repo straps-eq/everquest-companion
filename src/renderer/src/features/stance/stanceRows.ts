@@ -408,6 +408,66 @@ export function buildStanceRows(payload: StanceAdvicePayload): StanceTargetRow[]
     .sort((a, b) => b.lastSeenTs - a.lastSeenTs)
 }
 
+// ── WHICH TARGET THE PAGE OPENS ON ──────────────────────────────────────────────────────────
+//
+// The tab used to render every measured target as its own card, one under another, and a
+// session that has been through three zones turns that into a wall nobody reads. It is now one
+// DETAILED panel plus a selector, which makes "which one is open by default" a real decision
+// rather than an accident of scroll position.
+//
+// MOST RECENT WITH SOMETHING TO SAY. `buildStanceRows` sorts most-recently-hit first, so the
+// first row is what a live player is fighting — but "most recent" alone opens on a blank answer
+// often enough to matter: a target every one of whose hits landed while Evasive was worn pools
+// to `advice.hits === 0` (every sample refused, see `unmitigate`), so its card is a caveat and
+// nothing else. That is an honest card and it stays in the list; it is a terrible thing to land
+// on. So the default is the most recent row whose profile has USABLE hits in it.
+//
+// The last-resort fallback is `rows[0]` rather than null: when NOTHING is usable the honest
+// picture is the newest target saying "nothing usable measured yet", not an empty right-hand
+// column that reads as a broken page.
+
+/** The row the page opens on, by the rule above. `null` only when nothing has hit you at all. */
+function defaultTargetRow(rows: readonly StanceTargetRow[]): StanceTargetRow | null {
+  return rows.find((r) => r.advice.hits > 0) ?? rows[0] ?? null
+}
+
+/** The default selection as a key — what the view seeds its state with / compares against. */
+export function defaultTargetKey(rows: readonly StanceTargetRow[]): string | null {
+  return defaultTargetRow(rows)?.key ?? null
+}
+
+/**
+ * The row to DRAW, given what the user picked.
+ *
+ * `picked` is component state and the rows are rebuilt from a payload that re-arrives every few
+ * seconds — the ledger is capped (STANCE_TARGET_CAP drops least-recently-hit) and reset outright
+ * on a character switch, so the selected key really can vanish under a live view. Falling back to
+ * the default is the only behaviour that never renders a blank panel, and it is decided here so
+ * the component needs no effect to repair its own state.
+ */
+export function resolveSelection(rows: readonly StanceTargetRow[], picked: string | null): StanceTargetRow | null {
+  const chosen = picked === null ? null : (rows.find((r) => r.key === picked) ?? null)
+  return chosen ?? defaultTargetRow(rows)
+}
+
+/**
+ * The slice of the list the selector renders, and the one guarantee it must keep.
+ *
+ * The ledger holds up to 500 (mob, zone, tier) rows, so the list is capped and the rest are one
+ * click away. The SELECTED row is appended when the cap would have hidden it: a selector that
+ * does not contain the thing it is selecting is a selector with no visible current state.
+ */
+export function visibleTargets(
+  rows: readonly StanceTargetRow[],
+  selectedKey: string | null,
+  limit: number
+): StanceTargetRow[] {
+  const head = rows.slice(0, limit)
+  if (selectedKey === null || head.some((r) => r.key === selectedKey)) return head
+  const selected = rows.find((r) => r.key === selectedKey)
+  return selected ? [...head, selected] : head
+}
+
 /**
  * THE HEADLINE, as words — and the one place the split is turned into a sentence.
  *

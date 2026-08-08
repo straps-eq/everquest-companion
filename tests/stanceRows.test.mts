@@ -39,13 +39,16 @@ import {
   calloutFor,
   caveatsAt,
   caveatsFor,
+  defaultTargetKey,
   mismatchCount,
   mismatchLine,
   pct,
+  resolveSelection,
   sampleRows,
   splitPct,
   stanceLabel,
-  surviveLine
+  surviveLine,
+  visibleTargets
 } from '../src/renderer/src/features/stance/stanceRows'
 import { adviseFor, detectMismatch, MIN_CONFIDENT_HITS } from '../src/shared/stanceAdvice'
 import type { StanceAdvicePayload, StanceSample, TargetProfile } from '../src/shared/stanceAdvice'
@@ -393,4 +396,82 @@ test('SR: mismatchCount counts the cards that carry a callout', () => {
   const quiet = target({ mobKey: 'a fetid fiend', mobName: 'a fetid fiend', samples: [] })
   const rows = buildStanceRows(payload([bad, quiet], 'striker'))
   assert.equal(mismatchCount(rows), 1)
+})
+
+// ── 6. WHICH TARGET THE PAGE OPENS ON ───────────────────────────────────────────────────────
+//
+// The tab is master/detail now: ONE panel plus a selector, so "which one" is a decision the
+// module makes rather than an accident of scroll position. The rule is "most recent WITH USABLE
+// DATA", and the interesting half of it is the exclusion — a target whose every hit landed while
+// Evasive was worn pools to zero usable hits (`unmitigate` refuses those samples), so its panel is
+// a caveat and nothing else. It stays in the list; it must not be what the page opens on.
+
+/** A target measured entirely inside Evasive: real hits, nothing the app may say a word about. */
+function evadedOnly(over: Partial<TargetProfile> = {}): TargetProfile {
+  return target({ samples: [{ stanceKey: 'evasive', physical: 900, magical: 300, hits: 30 }], ...over })
+}
+
+test('SR: the page opens on the most recent target that has usable data', () => {
+  const newestButBlind = evadedOnly({ mobKey: 'a spite golem', mobName: 'a spite golem', lastSeenTs: 9000 })
+  const usable = target({ mobKey: 'cazic thule', lastSeenTs: 8000, samples: [fatSample('defensive', 1000, 200)] })
+  const older = target({ mobKey: 'a fetid fiend', mobName: 'a fetid fiend', lastSeenTs: 1000, samples: [fatSample('', 500, 100)] })
+  const rows = buildStanceRows(payload([usable, newestButBlind, older], 'defensive'))
+  // Recency order is untouched — the blind target is still first in the LIST.
+  assert.equal(rows[0].mobName, 'a spite golem')
+  assert.equal(rows[0].advice.hits, 0)
+  // …and the page opens on the one below it, which has something to say.
+  assert.equal(defaultTargetKey(rows), rows[1].key)
+  assert.equal(resolveSelection(rows, null)?.mobName, 'Cazic Thule')
+})
+
+test('SR: when NOTHING is usable the newest target is still shown, caveat and all', () => {
+  // The alternative is a blank right-hand column, which reads as a broken page rather than as
+  // "everything this session hit you through an evade".
+  const rows = buildStanceRows(payload([evadedOnly()], 'evasive'))
+  const sel = resolveSelection(rows, null)
+  assert.equal(sel, rows[0])
+  assert.equal(sel?.advice.hits, 0)
+  assert.ok(sel?.caveats.some((c) => c.kind === 'nothing'))
+})
+
+test('SR: nothing measured at all selects nothing — the view draws its empty state', () => {
+  assert.equal(defaultTargetKey([]), null)
+  assert.equal(resolveSelection([], null), null)
+  assert.equal(resolveSelection([], 'cazic thule|The Plane of Fear|2'), null)
+})
+
+test('SR: a pick wins over the default, including a pick with no usable data', () => {
+  const blind = evadedOnly({ mobKey: 'a spite golem', mobName: 'a spite golem', lastSeenTs: 9000 })
+  const usable = target({ lastSeenTs: 8000, samples: [fatSample('defensive', 1000, 200)] })
+  const rows = buildStanceRows(payload([blind, usable], 'defensive'))
+  // The default rule decides where the page STARTS; it never overrides a user who asked.
+  assert.equal(resolveSelection(rows, rows[0].key)?.mobName, 'a spite golem')
+})
+
+test('SR: a selection that vanished under a refresh falls back to the default, never to blank', () => {
+  // The ledger is capped (drop-least-recently-hit) and reset outright on a character switch, so a
+  // held key really can stop existing while the panel is open.
+  const rows = buildStanceRows(payload([target({ samples: [fatSample('defensive', 1000, 200)] })], 'defensive'))
+  const gone = resolveSelection(rows, 'a spite golem|The Plane of Hate|0')
+  assert.ok(gone)
+  assert.equal(gone.key, defaultTargetKey(rows))
+})
+
+test('SR: the selector never hides the row it is selecting', () => {
+  const many = Array.from({ length: 30 }, (_, i) =>
+    target({ mobKey: `mob ${String(i)}`, mobName: `mob ${String(i)}`, lastSeenTs: 10_000 - i, samples: [fatSample('', 100, 100)] })
+  )
+  const rows = buildStanceRows(payload(many, null))
+  const capped = visibleTargets(rows, rows[0].key, 5)
+  assert.equal(capped.length, 5, 'the cap holds when the selection is already inside it')
+  // A selection past the cap is APPENDED rather than swapped in: the recency order of the head is
+  // what makes the list scannable, and a list missing its own current row has no visible state.
+  const deep = visibleTargets(rows, rows[20].key, 5)
+  assert.equal(deep.length, 6)
+  assert.equal(deep[5], rows[20])
+  assert.deepEqual(deep.slice(0, 5), rows.slice(0, 5))
+  // Nothing selected, or a key that is gone, leaves the plain slice.
+  assert.equal(visibleTargets(rows, null, 5).length, 5)
+  assert.equal(visibleTargets(rows, 'not a key', 5).length, 5)
+  assert.equal(visibleTargets(rows, rows[0].key, rows.length).length, rows.length)
 })
