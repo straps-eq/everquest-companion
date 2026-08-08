@@ -62,9 +62,23 @@ npmRebuild: false
 # Auto-update + release hosting: electron-updater pulls from GitHub Releases of
 # this repo. The CI workflows (.github/workflows) publish here; the app reads
 # latest*.yml from the same owner/repo. `channel` is per-release (main vs latest).
+# FORK OWNERSHIP — THIS IS WHAT DECIDES WHERE A BUILT APP GOES LOOKING FOR ITS NEXT VERSION.
+#
+# electron-builder bakes this block into `app-update.yml` inside the package, and
+# electron-updater reads THAT at runtime. So `owner` is not merely a publishing target: leave it
+# pointing at the upstream repo and every install of THIS fork silently updates itself into
+# upstream's build — overwriting the fork's own features with a binary that has never heard of
+# them, on a schedule nobody asked for. It is the one line in the tree that can undo the fork.
+#
+# `straps-eq` is this fork (git remote `origin`); `jmoyers` is `upstream`. Both halves of the
+# pair have to move together: releases are published to this owner and updates are pulled from
+# the same owner, which is exactly the property that keeps a fork self-consistent.
+#
+# NOTE for anyone re-syncing with upstream: this line WILL come back as a conflict or, worse, as
+# a silent auto-merge if upstream ever edits the block. Check it after every upstream merge.
 publish:
   provider: github
-  owner: jmoyers
+  owner: straps-eq
   repo: everquest-companion
 
 win:
