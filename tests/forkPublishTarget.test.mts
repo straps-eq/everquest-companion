@@ -61,3 +61,26 @@ test('FP: the upstream owner appears NOWHERE in the publish block', () => {
     assert.ok(!line.includes(UPSTREAM_OWNER), `publish block still names ${UPSTREAM_OWNER}: ${line}`)
   }
 })
+
+test('FP: no publisherName is demanded of builds nothing signs', () => {
+  // THE SECOND WAY A MERGE CAN BREAK AUTO-UPDATE, and it is quieter than the first.
+  //
+  // `signtoolOptions.publisherName` is written into `app-update.yml`, and electron-updater's
+  // NsisUpdater then REQUIRES every downloaded update to carry a valid Authenticode signature
+  // from that publisher. This fork's signing hook self-skips without upstream's six AZURE_*
+  // secrets, so its releases are unsigned — and an unsigned update measured against a demanded
+  // publisher fails at the last step, after a full download, on every cycle, in silence.
+  //
+  // So the name must be ABSENT here for as long as the builds are unsigned. Upstream sets it,
+  // which means an upstream merge can restore it as an ordinary auto-merge with nothing on
+  // screen. If this fails after a merge: delete the line again, or — if this fork has genuinely
+  // started signing — set it to ITS OWN certificate's subject CN. Never to upstream's name;
+  // a signed build with a mismatched publisherName fails exactly the same way.
+  const active = YML.split(/\r?\n/).filter((l) => !l.trimStart().startsWith('#'))
+  const offenders = active.filter((l) => l.includes('publisherName'))
+  assert.deepEqual(
+    offenders,
+    [],
+    `publisherName is set, so every unsigned auto-update will be refused after downloading: ${offenders.join(' | ')}`
+  )
+})
