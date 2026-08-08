@@ -4,7 +4,7 @@
 //
 //   ingestWorld    — epoch / zone / charm / petClaim / uncharm / cc / death: the
 //                    entity and segmentation lifecycle.
-//   ingestCombat   — damage / heal / mitigation / miss / resist: the meter itself.
+//   ingestCombat   — damage / heal / healUnstated / mitigation / miss / resist: the meter itself.
 //   ingestCast     — castBegin / fizzle / interrupt: the own-cast lifecycle both ownership
 //                    inferences (cast-less procs, charm/CC binding) run off.
 //   ingestChoice   — stance / invocation / active special attack: the character's STANDING
@@ -18,7 +18,7 @@
 import { idKey } from '../log/parser'
 import { damageCategory } from './taxonomy'
 import { evalClosure, ensureEncounter, finalizeCurrent, finalizeZoneSession } from './lifecycle'
-import { route, routeHeal, routeMiss, routeMitigation, routeResist } from './routing'
+import { route, routeHeal, routeHealUnstated, routeMiss, routeMitigation, routeResist } from './routing'
 import { SEC_ANALYTICS, SEC_DISPATCH } from './foldProbe'
 import {
   applyStance,
@@ -502,7 +502,13 @@ function ingestDamage(st: EngineState, ev: DamageEventE, live: boolean): void {
   foldStanceLedger(st, dmgEv, at, { seq: ev.seq, live })
 }
 
-/** damage / heal / mitigation / miss / resist. Returns true if consumed. */
+/**
+ * damage / heal / healUnstated / mitigation / miss / resist. Returns true if consumed.
+ *
+ * BOTH SIDES OF THE FORK EDITED THIS LINE, and both edits are wanted. Upstream added
+ * `healUnstated` (Mend's healing lane, whose amount the log refuses to state); this fork threads
+ * `live` down to the stance advisor, which must stay inert during a historical replay.
+ */
 function ingestCombat(st: EngineState, ev: LogEvent, live: boolean): boolean {
   switch (ev.kind) {
     case 'damage':
@@ -512,6 +518,12 @@ function ingestCombat(st: EngineState, ev: LogEvent, live: boolean): boolean {
       routeHeal(st, ev)
       foldHealAnalytics(st, ev)
       st.log(ev.ts, 'heal', 'info', `+ ${ev.healer ?? '?'} → ${ev.target} ${ev.amount}${ev.spell ? ` (${ev.spell})` : ''}`)
+      return true
+    case 'healUnstated':
+      // No analytics fold: a heal with no amount cannot enter the proc model, and the processing
+      // log says so out loud rather than printing a 0 that reads like a measurement (JOS-86).
+      routeHealUnstated(st, ev)
+      st.log(ev.ts, 'heal', 'info', `+ ${ev.target} ${ev.skill} (amount not stated)`)
       return true
     case 'mitigation':
       routeMitigation(st, ev)

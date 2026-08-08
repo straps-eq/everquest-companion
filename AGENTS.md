@@ -454,6 +454,25 @@ on `log:character`. Overlay = second renderer entry (overlay.html) with a
 minimal `eqOverlay` bridge (transparent alwaysOnTop, click-through pin).
 ```
 
+- **A MODULE WITH A SECOND INPUT MUST REPORT ITS OWN REVISION AS `seq`, NOT
+  THE LAST EVENT'S** (JOS-87, measured in the running app). `useModule` dedupes
+  with `if (d.seq <= knownSeq) return`, and `knownSeq` comes from the hydration
+  snapshot — so "the last LogEvent seq folded in" only works as a revision
+  counter for a module whose state moves ONLY when an event moves it. The combo
+  module has a second input (a user correction, which re-labels every interval
+  and advances no log seq at all), and a correction written while the log was
+  idle produced a delta the renderer dropped as a duplicate: the store had it,
+  the model had it, and the screen kept showing the wrong answer until the next
+  log line happened to arrive. On an idle log — which is exactly when a user is
+  in Preferences fixing something — that is forever. The fix is a private
+  counter bumped by anything that can change the state (`ComboModule.markStale`,
+  reported by BOTH `snapshot()` and `flushDelta()` so hydrate and delta share
+  one clock); `seq`'s only consumer is that dedupe, which asks for nothing but
+  "strictly increasing when the state changed". The other half is the PUSH:
+  `invalidate()` alone waits for the 1 s heartbeat, so an out-of-band write
+  calls `registry.flushNow()` (ipc/combo.ts `republish()`). Both are needed —
+  flushing promptly is useless if the push is then dropped. A unit test cannot
+  see either half; `tests/e2e/loadout-override.e2e.mts` is what caught it.
 - **Character epochs**: character-scoped state (leveling/AA, loot, kills,
   turnins, buffs live-state) resets at the epoch boundary — anchored at
   OFFICIAL LAUNCH 2026-07-28 (`epochDetector.ts`; the user's beta character
@@ -474,6 +493,25 @@ minimal `eqOverlay` bridge (transparent alwaysOnTop, click-through pin).
   at startup from its pinned registry tag — seeded + suggested alert defs
   reference its derived soundIds. App signals (bossDefeat, questComplete)
   fire from single always-mounted detectors.
+  **A `where.spell` MATCHER TESTS THE WHOLE CANDIDATE LIST, NEVER THE FIRST PICK**
+  (JOS-84). EQ prints ONE landing/wears-off sentence per spell FAMILY, so
+  `buffApply.spell` / `buffWearOff.spell` are a documented best-effort first
+  candidate — alphabetical, and never the spell you cast — while `candidates`
+  carries the truth. The suggestion wizard's `lands` template pinned
+  `where:{spell:'<your spell>'}` to that pick and so could never fire: a v0.10.0
+  enchanter's Shiftless Deeds alert was compared to the string "Forlorn Deeds", and
+  Incapacitate's to "Disempower". Now `spellCandidateNames` widens the `spell` key
+  (and ONLY that key, and only when the event carries candidates) to every name the
+  line could be, and `matchedSpellName` reports the one that satisfied the def so a
+  spoken alert says your spell rather than the coin flip's. The consequence is
+  stated, not hidden: when one sentence is five spells, the alert is an alert on the
+  FAMILY — which is also what keeps it alive across the level-up that replaces the
+  spell. Nothing named `\] `-anchored or self-vs-third-person was ever the problem.
+  **AND `suggestions.ts` IS NODE-TESTED NOW** — it imported a VALUE through
+  `@shared/*`, so it could not load under tsx and no test had ever run a real
+  suggested def end to end. That is a large part of why this shipped; the import is
+  relative (repo law) and `tests/suggestedAlertsFire.test.mts` drives the real
+  wizard path through the real parser into the real module.
 
 ### Electron trust boundary (do not weaken)
 
@@ -694,6 +732,83 @@ minimal `eqOverlay` bridge (transparent alwaysOnTop, click-through pin).
   melee skill and a spell. The per-CATEGORY drill separates them exactly and
   every category total is unaffected; `tests/combatSmiteLane.test.mts` W54
   pins the collision on real bytes rather than hiding it.
+  **RANGED (JOS-92) NEEDED A THIRD ARGUMENT, BECAUSE IT FAILS BOTH OF THE ABOVE.**
+  A ranger asked for the bow split out of Melee ("stance switching Ranger/Ranged
+  stance uses bow in melee. currently that is lumped into the same bar"). Same
+  shape as cleave/smite — `shoot` has been in MELEE_VERBS since the missing-verbs
+  fix, so bow damage was always COUNTED and only the ROW was missing — but run
+  JOS-81's skill-up test on it and it comes back a WEAPON verb: `better at Shoot!`
+  does not exist, `shoot` ticks under **`Archery`**, and Archery sits in the
+  weapon-type family beside 1H Slashing / 1H Blunt / Hand to Hand. Borrowing the
+  smite argument would have been a lie. THE LANE RESTS ON THE CLAUSE JOS-77
+  ALREADY WROTE AND NEVER USED: the generic row exists because those verbs "are
+  what a weapon IN A HAND prints, and four of them are ONE auto-attack lane". A
+  bow is not that lane — different slot, different skill, and none of the hand
+  lane's multipliers reach it (Dual Wield 322 skill-ups, Double Attack 395,
+  Triple Attack 100). So the rule gains a NARROW second clause: **a weapon verb
+  fired from a different SLOT than the hands is not the hand lane**, and `shoot`
+  is the only verb in MELEE_VERBS that qualifies. The label comes from the game's
+  own word for the mode (`You assume a ranged stance.`), not from a skill table.
+  NO THROWN LANE IS INVENTED BESIDE IT: `You throw` is ZERO whole-log, ` throws `
+  ZERO, `Throwing` occurs only inside item names, no `better at Throwing!` tick —
+  awaiting-sample law, so no branch. THE DISCRIMINATOR IS THE VERB AND NOTHING
+  ELSE, which is what a stance-switcher needs (a class- or stance-keyed split
+  would mis-assign both halves of his fight): all nine `shoots` damage lines in
+  the log are shape-identical to melee (`<A> shoots <B> for N point(s) of
+  damage.`) and `(Critical)` is the ONLY annotation the family has ever carried.
+  THE OWNER HAS NEVER FIRED A BOW — `You shoot` ZERO in 1,438,942 lines, `better
+  at Archery!` exactly ONCE, `You assume a ranged stance.` twice — so the lane is
+  EMPTY in every committed fixture and the law-8 gate is absolute: all 103
+  fixtures replayed before and after (per-segment out/in, per-source, per-category,
+  per-lane, per-category-drill; 1,591 rows) came out BYTE-IDENTICAL, because
+  there is no self `shoot` line in the tree to move a figure. What the log does
+  carry is OTHER PEOPLE's archery — 9 landed, 8 avoided — which `w57-ranged-lane.log`
+  (two hits + a dodged shot beside the owner's own Yarik fight) and
+  `w58-ranged-critical.log` (the `(Critical)` arm) pin; both were cut for this
+  ticket because ` shoots ` was ZERO across all 101 pre-existing fixtures. The
+  self arm is INJECTED in `tests/combatRangedLane.test.mts` (the W52/petClaim
+  precedent), conjugated from the attested third-person template with the owner's
+  own real bow amounts, and it asserts the movement is exact: Ranged 76/3 appears,
+  `you|Melee` does not budge, and the melee category grows by exactly 76.
+  A stranger's bow is still IGNORED by the meter (routing.ts `classify`) — parsing
+  a line into a new lane is not the same as admitting it, and W57 pins that too.
+- **A HEAL THE LOG ANNOUNCES BUT NEVER VALUES GETS A LANE THAT CARRIES A COUNT
+  AND NO NUMBER** (JOS-86 — the monk's Mend). `You mend your wounds and heal
+  some damage.` is the whole sentence: no amount, no target, no third-person
+  twin. The user report ("Mend does not appear in the healing logs", v0.10.0)
+  reads like the Cleave/Smite shape and is its INVERSE — those were always
+  counted and merely lacked a row; Mend was never parsed at all, because every
+  heal path in the model is built around a number. WHOLE-LOG PARTITION, and it
+  is exact: of 1,178 case-insensitive `mend` lines, **876** are that sentence,
+  200 are `You have become better at Mend! (N)`, 1 is the ability grant, 2 are a
+  mob named `a Nisch Mas Mender`, and 99 are third-party chat. So FIRST PERSON
+  ONLY, no failure shape, no refusal shape, no amount anywhere — do not invent
+  an arm the game has never printed. THE FIX IS A KIND, NOT A FLAG: a `heal`
+  with `amount: 0` would have been a lie with a long tail (the ledger files a
+  tick that "landed on a full health bar", the row's `min` collapses to 0, and
+  `foldHealAnalytics` enters a 0-damage "Mend proc"), so it is `healUnstated`
+  with **no amount field at all** and a third `HealClassification`, `'unstated'`,
+  whose 0 means "no measurement exists" and never "the measurement was zero".
+  It enters NO sum — row total, view total, hps, overheal, `count` — and rides
+  its own `HealSourceView.unstatedCount` so the crit and overheal rates beside
+  it keep their VALUED denominator. Every string that would render that 0 as a
+  figure is replaced by the reason there isn't one (`laneAmount`/`healerAmount`
+  print an em dash, never `fmt(0)`); a genuinely 0-total *restored* lane still
+  prints 0, because that one really did measure zero. This is the rune lane's
+  treatment for the opposite reason — a rune is an amount attached to something
+  that never touched a health bar, a Mend is a health bar with no amount — and
+  the `magical skin absorbs` families' treatment for the identical one. THE
+  GOLDEN IS THE OWNER'S OWN BYTES, nothing injected: he mended 876 times, so
+  the reporter's slice never had to become a fixture (W55
+  `w39-spellblade-switch.log`, the lane beside three valued lanes; W56
+  `w47-special-dragon-punch.log`, a Mend alone SYNTHESIZING the self row the
+  way an out-of-combat rune already did). LAW 8 GATE over every committed
+  fixture, healing view diffed line-for-line: **every difference was an
+  ADDITION** — not one total, count, min/max, overheal, pct, hps, enemy row or
+  damage figure moved. A 0-total lane cannot move `rankLanes`' denominator
+  (`Math.max(1, …totals)`), which is why the existing bar fills are identical
+  too. One fixture (`e2e-combat.log`) shows no lane and that is correct: its
+  Mend precedes two zone lines, so it lands in a FINALIZED zone session (law 7).
 - **SPECIAL ATTACKS PRINT NO VERB OF THEIR OWN.** A Dragon Punch, an Eagle
   Strike and a Tiger Claw ALL land as `You strike …`; Round Kick and Flying
   Kick land as `You kick …`. The game names the live one exactly once, in
@@ -753,6 +868,24 @@ minimal `eqOverlay` bridge (transparent alwaysOnTop, click-through pin).
   cast lines. Permanent Illusion AA (ownership learned from its purchase
   line): illusion self-buffs permanent; ONE illusion per entity;
   `Your illusion fades.` is the shared remover.
+  **THE BURST IS ALSO THE ONLY LINE THAT ENUMERATES YOUR GROUP BY NAME**
+  (JOS-85). One cast of it prints two or more
+  `You healed <X> … by <Spell>.` lines in the SAME second — the only shape in
+  this log where the game lists who your buffs reached. MEASURED: 83 such
+  fan-out casts in the owner's 900,562-line log and **all 83** are within 15 s
+  of a Quick Buff line, so it is a fact about the ABILITY, not about spell
+  target types — spells.json calls `Skin Like Nature` / `Symbol of Pinzarn`
+  "Single Friendly (or Self)" while the log lands each on three entities in one
+  second, because the wiki describes a different server. It proves RECIPIENTS,
+  not membership (a burst hits your own pets, and two of the owner's 67 bursts
+  reached a player he was demonstrably not grouped with), so the roster admits
+  a name only in conjunction with `You gain party experience!` earlier in the
+  session — measured 2/2 correct, 0 false positives, identical at every backward
+  window from 2 min to 6 h. It is the roster's SECOND recovery path and exists
+  because the first (`<Name> tells the group, '…'`) needs somebody to talk: a
+  reporter's 12,376-line session held two group-mates and ZERO group events.
+  Weakest provenance rung (`buffed`); self / charmed / claimed-pet names refused.
+  src/main/modules/buffFanOut.ts, docs/plans/group-model.md §1 G4.
 - Summoned pets have random proper names (Vebarn, Garer…); bind via
   owner-only tells `<Name> told you, '… Master.'`; they persist across
   zones (charmed pets do not). A pet-claim tell from a name EVER seen
@@ -879,6 +1012,32 @@ minimal `eqOverlay` bridge (transparent alwaysOnTop, click-through pin).
   feel less drowsy.` (62) — that name no spell and resolve to all-slow candidate
   lists, so the alert reports the family and never which one. Its tripwire is one
   word away: `Your speed returns to normal.` is NINE HASTES (law 3).
+- **CHARM AND MEZ ARE ROSTERS TOO — AND THE SPELL DB IS THE ORACLE** (JOS-84).
+  `Your <spell> spell has worn off of <mob>.` is ONE sentence for three facts, and
+  `rulesets.ts` decides which by matching the spell NAME: `charmSpell` ⇒ `uncharm`,
+  `ccSpell` ⇒ `cc {refresh:true}`, neither ⇒ an ordinary `buffFade`. Both were
+  hand-audited against an ENCHANTER's log, so `ccSpell` held exactly one bard song
+  — Largo's Melodic Binding, level 20 — and nothing a bard casts after it. Every
+  bard past the mid-twenties therefore held a crowd-control break the parser filed
+  as a buff fade: no event, no alert, no way to tell ("Hey, for bard the charm
+  break doesnt work? :D"). The completion is DB knowledge, not a guess:
+  spells.json groups spells by LANDING MESSAGE, so "every castable spell sharing a
+  message with a member the roster already classifies" is enumerable, and
+  `tests/charmCcRoster.test.mts` RE-DERIVES both families from spells.json every
+  run — a future scrape that adds a member fails the suite instead of going mute.
+  Added: the bard holds (Kelin's Lucid Lullaby 15, Song of the Sirens 27,
+  Crission's Pixie Strike 28, Solon's Bewitching Bravura 39, Sionachie's Dreams 40,
+  Largo's **Assonant** Binding 51 — the direct upgrade of the one song that was
+  covered, one word apart) and the Necromancer charm-undead tail (Thrall of Bones
+  54, Enslave Death 60; the ladder's first three were covered by accident).
+  **THE BARD'S BRAVURA IS A MEZ, NOT A CHARM**, measured on the reporter's slice:
+  each own `You begin singing Solon's Bewitching Bravura IX.` is followed ~2 s
+  later by `<mob>'s eyes glaze over.` (Bravura's own landing message), while every
+  `<mob> has been charmed.` in that slice trails ANOTHER player's `begins casting
+  Allure X.` by one second. So it fires "Mez / root broke", not charm break.
+  **THE DB AND THE LOG DISAGREE ABOUT ITS NAME**: spells.json says `Solon's
+  Bravura`, the log prints `Solon's Bewitching Bravura` (the scrape lost the middle
+  word), so the stem answers to both — the oracle found that, not a reviewer.
 - **THE FRIEND SYSTEM ANNOUNCES NOTHING** (JOS-69, same sweep). It prints exactly
   two things: `Friends currently on EverQuest Legends:` (43× — the `/friends`
   command's own output, a header + dashed rule + a /who-style roster row, printed
@@ -1563,14 +1722,23 @@ of it is upstream's concern, and it is kept in one block so it is trivially drop
   `Remove-Item Env:ELECTRON_RUN_AS_NODE -ErrorAction SilentlyContinue; npm run dev`
   A plain PowerShell window opened outside the IDE does not need it. The same
   applies to `npm run test:e2e`, which launches Electron the same way.
-- **TWO E2E SPECS FAIL ON THIS MACHINE, ON UNMODIFIED MAIN.** `whats-new` and
-  `maps`, and the cause is display scaling: this display runs at **122%**, so
-  `devicePixelRatio` is 1.22 and both specs assume an integer one — whats-new
-  asserts exact window heights (`innerHeight=1002` where 1000 is expected, 621
-  for 620, 902 for 900) and maps asserts `canvas buffer === css × dpr` with no
-  tolerance for the rounding (`739 × 1.22 = 901.58 → 902`). Baseline is therefore
-  **16/18**, and a merge is "green" at 16/18 here. VERIFY THE BASELINE ON MAIN
-  before blaming a change for either of them.
+- **THREE E2E SPECS FAIL ON THIS MACHINE FOR ONE REASON: DISPLAY SCALING.** The
+  monitor is 5120x1440 physical at **122%**, so Electron reports a work area of
+  4197x1141 — exactly 5120/1.22 and 1392/1.22 — and `devicePixelRatio` is
+  1.2200000286102295. Three specs assume an integer ratio and fail on the
+  rounding, none of them for a reason in the tree:
+    * `whats-new` asserts exact window heights (`innerHeight=1002` where 1000 is
+      expected, 621 for 620, 902 for 900);
+    * `maps` asserts `canvas buffer === css x dpr` with no tolerance
+      (`739 x 1.22 = 901.58 -> 902`);
+    * `toast` (arrived with upstream's JOS-83 celebration overlay) asserts the
+      intro window is horizontally centred within +/-2px: the centre of a
+      4197-wide area for a 566-wide window is 1815.5 and it lands at 1819, a
+      3.5px DIP-to-physical rounding error.
+  Baseline is therefore **17/20**, and a merge is "green" at 17/20 here. VERIFY
+  THE BASELINE before blaming a change for any of the three. On an
+  integer-scaled display all three should pass, which is why upstream does not
+  see them.
 - **`overview.e2e.mts` flakes under parallel load** — a live-vs-last-fight race
   ("overview `Current fight (live)` · selector `Last fight — …`"). Seen once in a
   4-way parallel run, then 3/3 green in isolation and green on every re-run. Not
@@ -1651,8 +1819,14 @@ of it is upstream's concern, and it is kept in one block so it is trivially drop
 - **Awaiting real samples** (the outputs registry refuses them typed until
   a committed fixture graduates each): /outputfile guild, raid, spellbook,
   factions, achievements, alternateadv — one in-game `/outputfile <kind>`
-  from anyone provides it. Same law for bow combat lines (Double Bow Shot
-  annotation unobserved — no archery in any log seen).
+  from anyone provides it. Same law for the **Double Bow Shot annotation**,
+  still unobserved after JOS-92's whole-log sweep: `(Critical)` is the only
+  annotation any of the nine `shoots` lines carries, and the file's one
+  `bow shot` hit is a player bragging in General chat. The rest of that note
+  is now SUPERSEDED — archery does appear, just never the owner's: 9 landed
+  and 8 avoided bow lines from other players, all third-person, and the Ranged
+  lane (above) is built on them. `You shoot` remains ZERO, so the FIRST-PERSON
+  arm is the shape still awaiting a sample.
 - Releases this arc: v0.4.0 (planner + toasts + parity + credited kills),
   v0.5.0 (monk lanes, outputs engine, AA ladder), v0.6.0 (Rounds panel,
   log-attach fix, Wine installer) — all sandbox-gated + smoke-verified;

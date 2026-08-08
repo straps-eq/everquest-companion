@@ -65,6 +65,21 @@ const DOT_NOCASTER_RE = /^(.+?) ha(?:s|ve) taken (\d+) damage by (.+?)\.(?: \((.
 const HEAL_RE =
   /^(.+?) healed (.+?)( over time)? for (\d+)(?: \((\d+)\))? hit points?(?: by (.+?))?\.(?: \(([A-Za-z][A-Za-z ]*)\))?$/
 
+// ----- Mend (JOS-86): a heal the log ANNOUNCES but never VALUES -----
+// `You mend your wounds and heal some damage.` — the monk skill, 876 lines whole-log, and the
+// only mechanical Mend shape there is (the full partition of all 1,178 "mend" lines is written
+// out above HealUnstatedEvent in shared/logEvents.ts). It carries no number and no target, so it
+// yields a `healUnstated` event rather than a `heal` with a fabricated 0 — see that type's header
+// for why the absence is structural instead of a flag.
+//
+// ANCHORED WHOLE, deliberately. The sentence is a fixed string with no captures, so the regex
+// asserts the entire line rather than sniffing for the word "mend": `a Nisch Mas Mender healed
+// itself for 154 hit points by Symbol of Ryltan.` is a mob's name and belongs to the heal family,
+// and the 99 chat lines that discuss the skill must never reach the ledger.
+const MEND_RE = /^You mend your wounds and heal some damage\.$/
+/** The skill behind MEND_RE. Named here so the ledger lane and the parser can never disagree. */
+const MEND_SKILL = 'Mend'
+
 // ----- absorption / mitigation (Task #59) — damage PREVENTED, never hit points restored -----
 // Three VERIFIED self-form families (see MitigationEvent in shared/logEvents.ts for the counts):
 //   `You gain a rune for 12 points of absorption.`                       → 'rune' (has an amount)
@@ -221,6 +236,56 @@ export function meleeVerbBase(verb: string): string {
  * (`verb` is undefined by construction), lands in the `spell` category and has always had its
  * own named row. This function never sees it. The two are one second apart in the log and one
  * letter apart in the eye; "Smite" is the melee verb only.
+ *
+ * ── RANGED (JOS-92), AND IT IS *NOT* THE CLEAVE/SMITE ARGUMENT ───────────────────────────────
+ *
+ * A ranger's report: "Could you split Ranged (bow) into another field separate from Melee? I
+ * would love to see DPS differences between my dual wield melees and my bow … stance switching
+ * Ranger/Ranged stance uses bow in melee. currently that is lumped into the same bar as melee."
+ * Same SHAPE as cleave and smite — `shoot` has been in MELEE_VERBS since the missing-verbs fix,
+ * so bow damage was always COUNTED, and `meleeSkill('shoot')` answered "Melee", so the ROW could
+ * not exist — but a DIFFERENT justification, and the difference has to be stated rather than
+ * borrowed, because the borrowed one is false.
+ *
+ * THE SKILL-UP TEST THAT PROVED SMITE *REFUSES* THIS LANE. JOS-81 decided the question with the
+ * skill-up stream: a weapon verb never ticks under its own name (a slash ticks `1H Slashing`, a
+ * crush `1H Blunt`, a punch `Hand to Hand`), while `Smite` ticks 280 times under `Smite`. Run
+ * that same test on `shoot` and it comes back a WEAPON verb: there is no `better at Shoot!` line
+ * anywhere, `shoot` ticks under `Archery`, and `Archery` sits squarely in the weapon-type family
+ * beside 1H Slashing / 2H Slashing / 1H Blunt / 1H Piercing / Hand to Hand. By JOS-81's test
+ * alone, `shoot` belongs in the generic row. So this lane does not rest on that test.
+ *
+ * IT RESTS ON THE CLAUSE JOS-77 ALREADY WROTE DOWN AND NEVER HAD TO USE. The reason
+ * slash/pierce/crush/hit share one anonymous row is not "weapon verbs never get rows" — it is
+ * that those four "are what a weapon IN A HAND prints, and four of them are ONE auto-attack
+ * lane". A bow is not in that lane. It is fired from a different equipment slot, under a
+ * different skill, and none of the hand lane's multipliers reach it (Dual Wield 322 skill-ups,
+ * Double Attack 395, Triple Attack 100 — all of them about swings from hands). The game states
+ * the mode change itself, in the reporter's own words and its own: `You assume a ranged stance.`
+ * — which is where this lane takes its NAME from, rather than from a skill table.
+ *
+ * So the rule gains a second clause, and it is narrow: a weapon verb that fires from a DIFFERENT
+ * SLOT than the hands is not the hand lane, however weapon-shaped its skill is. `shoot` is the
+ * ONLY verb in MELEE_VERBS that qualifies. No thrown lane is invented beside it, because the log
+ * has never printed one: `You throw` is ZERO whole-log and ` throws ` is ZERO, `Throwing` occurs
+ * only inside item names (`Throwing Boulder` ×143), and there is no `better at Throwing!` tick.
+ * A lane the log has not demonstrated does not get written from grammar (the awaiting-sample law).
+ *
+ * THE LANE IS DRIVEN BY THE MESSAGE FORM AND NOTHING ELSE — no class guessing, which matters
+ * doubly here because the reporter is a ranger who STANCE-SWITCHES: his bow and his dual wield
+ * land in the same fight, seconds apart, so a class-keyed or stance-keyed split would mis-assign
+ * both. The verb is the whole discriminator, and a whole-log sweep of all nine `shoots` damage
+ * lines confirms nothing else in the line could serve: they are shape-identical to melee
+ * (`<A> shoots <B> for N point(s) of damage.`) and the ONLY trailing annotation the family has
+ * ever carried is `(Critical)` — there is no `(Double Bow Shot)` line in the file (AGENTS.md
+ * listed that annotation as unobserved and it still is).
+ *
+ * THE OWNER HAS NEVER FIRED A BOW, so this lane is EMPTY in every committed fixture and in all
+ * three of his logs: `You shoot` is ZERO in 1,438,942 lines, and `You have become better at
+ * Archery!` ticks exactly ONCE. That is the law-8 statement in its strongest form — not one
+ * existing figure can move, because there is no self `shoot` line anywhere to move it. What the
+ * log DOES carry is nine third-person bow hits and eight avoided ones from other players, which
+ * is what `w57-ranged-lane.log` and `w58-ranged-critical.log` pin (tests/combatRangedLane.test.mts).
  */
 export function meleeSkill(verb: string): string {
   const v = verb.toLowerCase()
@@ -229,6 +294,7 @@ export function meleeSkill(verb: string): string {
   if (v.startsWith('kick')) return 'Kick'
   if (v.startsWith('cleav')) return 'Cleave'
   if (v.startsWith('smite')) return 'Smite'
+  if (v.startsWith('shoot')) return 'Ranged'
   if (v.startsWith('frenz')) return 'Frenzy'
   if (v.startsWith('flurr')) return 'Flurry'
   return 'Melee'
@@ -461,8 +527,13 @@ export function classifyDamage(c: ClassifyCtx): LogEvent | null {
   return null
 }
 
-/** Heals (NEW). */
+/** Heals (NEW), plus the one heal family that states no amount (JOS-86). */
 export function classifyHeal({ text, ts, seq, raw }: ClassifyCtx): LogEvent | null {
+  // Cheapest discriminator first, and it is disjoint from ' healed ' by construction — the mend
+  // sentence contains "heal some damage", never the past participle the HEAL_RE family uses.
+  if (text.startsWith('You mend') && MEND_RE.test(text)) {
+    return { kind: 'healUnstated', seq, ts, raw, skill: MEND_SKILL, target: 'You' }
+  }
   if (text.includes(' healed ')) {
     const m = HEAL_RE.exec(text)
     if (m) {

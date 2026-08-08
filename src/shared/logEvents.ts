@@ -10,13 +10,20 @@ import type { PoisonEffect, PoisonGroup } from './poisons'
 // THE DERIVED STANCE MISMATCH is declared in shared/stanceAdvice.ts — beside `detectMismatch`,
 // the only function able to build one — and imported back here for the union at the bottom.
 // Two reasons it is not written out in this file: the decision and its wire shape belong
-// together, and this file stands at 392 of the 400-code-line factoring ceiling (growing past a
-// limit the repo enforces is not something a new event kind gets to do). BOTH directions are
+// together, and this file stands AT the 400-code-line factoring ceiling (growing past a limit
+// the repo enforces is not something a new event kind gets to do). BOTH directions are
 // `import type`, so the pairing is erased at compile time and there is no runtime cycle — the
 // same construction alertGroups.ts and alertGroupsRefused.ts use.
+//
+// AND IT IS NOT RE-EXPORTED FROM HERE. There was a `export type { StanceMismatchEvent }` on this
+// line, and merging upstream deleted the last line of headroom it was spending: upstream's own
+// `healUnstated` took the file to 401 against a ceiling of 400. Nothing imported the re-export —
+// every consumer already reaches for `shared/stanceAdvice`, which is where the type is defined —
+// so it was pure indirection, and the cheapest honest line to give back. The alternative was
+// factoring a family out of a file upstream curates, which would buy headroom at the price of a
+// conflict on every future merge. NOTE FOR THE NEXT EVENT KIND: this file is now exactly at the
+// limit, so the next one to arrive — from either side of the fork — has to do that factoring.
 import type { StanceMismatchEvent } from './stanceAdvice'
-
-export type { StanceMismatchEvent }
 
 /** Fields present on every event: a monotonic sequence, timestamp, and the raw line. */
 export interface LogEventBase {
@@ -229,6 +236,44 @@ export interface HealEvent extends LogEventBase {
    * — the exact failure the damage path's DoT gate exists to prevent. Absent = a direct heal.
    */
   overTime?: boolean
+}
+
+/**
+ * AN ANNOUNCED HEAL THE LOG NEVER VALUES (JOS-86) — the monk's Mend.
+ *
+ * `You mend your wounds and heal some damage.` is the whole sentence: no number, no target, no
+ * third-person twin. Hit points really did go back on the bar and the game declines to say how
+ * many, so this is the exact inverse of MitigationEvent below — that one is an amount attached
+ * to something that never touched a health bar; this one is a health bar with no amount.
+ *
+ * IT IS ITS OWN KIND FOR THE SAME REASON MITIGATION IS. Emitting a `heal` with `amount: 0`
+ * would be a lie that every downstream consumer would then have to un-learn: the healing ledger
+ * would file it as a tick that landed on a full health bar (`fullOverheal`), the row's `min`
+ * would collapse to 0, and `foldHealAnalytics` would enter a 0-damage "Mend proc" into the proc
+ * model. A kind with NO `amount` FIELD AT ALL makes the absence structural — there is nothing
+ * to accidentally sum.
+ *
+ * VERIFIED shapes (full-log sweep of eqlog_Primitive_freeport.txt, 2026-08-07 — 1,178 lines
+ * contain "mend" case-insensitively and they partition exactly):
+ *   876  `You mend your wounds and heal some damage.`  — the ONLY mechanical heal shape
+ *   200  `You have become better at Mend! (N)`         — the skill-up stream (skillUp)
+ *     1  `You have gained the ability to use Mend.`
+ *     2  a mob literally named `a Nisch Mas Mender`
+ *    99  third-party chat about the skill (all quoted, all dropped by the scrub)
+ * So: FIRST PERSON ONLY (no `<X> mends …` exists), no failure shape, no "you are not wounded"
+ * refusal, and no amount in any of the 876. Do not invent a third-person arm for a sentence the
+ * game has never printed (AGENTS.md awaiting-sample law).
+ */
+export interface HealUnstatedEvent extends LogEventBase {
+  kind: 'healUnstated'
+  /**
+   * The class SKILL that healed. 'Mend' is the only value the log has ever produced; it is a
+   * field rather than a constant so a second amount-less family graduates by adding a regex,
+   * not by reshaping the ledger.
+   */
+  skill: string
+  /** Who it landed on. The sentence is first-person only, so this is always 'You' today. */
+  target: string
 }
 
 /**
@@ -492,7 +537,11 @@ export interface BuffFadeEvent extends LogEventBase {
   target?: string
 }
 
-/** `You have been slain by <killer>!` — the PLAYER died (buffs are stripped). */
+/**
+ * The PLAYER died (buffs are stripped). Two log shapes, one event: `You have been slain by
+ * <killer>!`, and the killerless `You died.` the client prints when a DoT tick lands the
+ * killing blow — hence `killer` is optional (JOS-88).
+ */
 export interface PlayerDeathEvent extends LogEventBase {
   kind: 'playerDeath'
   killer?: string
@@ -1216,6 +1265,7 @@ export type LogEvent =
   | DeathEvent
   | DamageEventE
   | HealEvent
+  | HealUnstatedEvent
   | MitigationEvent
   | MissEvent
   | ResistEvent
