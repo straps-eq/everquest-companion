@@ -1,5 +1,5 @@
 // THE STANCE TAB'S CHARTS — pictures of things the ledger actually measured. Two of the three
-// live here (the composition donut and the stance comparison); the third, observed-vs-recovered,
+// live here (the composition donut and the stance comparison); the third, landed-vs-full-hit,
 // is StanceRecoveryChart.tsx, split off for file mass and sharing this file's palette and label
 // layer.
 //
@@ -82,19 +82,19 @@ const DONUT_TIP: Record<'physical' | 'magical', string> = {
 }
 
 /**
- * Physical vs magical of what the mob SWINGS FOR, as a ring with the estimated total in the hole.
+ * Physical vs magical of the mob's FULL DAMAGE, as a ring with the estimated total in the hole.
  *
- * It replaces a two-segment strip, and the reason is the number in the middle: the split and the
- * size are one fact ("this thing swings for 30k, two thirds of it spells") and the strip could
- * only carry the ratio. The two segments still answer on hover, which is what the strip was drawn
- * by hand for in the first place.
+ * It replaces a two-segment strip, and the reason is the number in the middle: the mix and the
+ * size are one fact ("this thing hits for 30k, two thirds of it spells") and the strip could only
+ * carry the ratio. The two segments still answer on hover, which is what the strip was drawn by
+ * hand for in the first place.
  */
 export function CompositionDonut({
   split,
   total
 }: {
   split: { physical: number; magical: number }
-  /** the un-mitigated pooled total, in points — the figure in the hole */
+  /** the measured full-damage total, in points — the figure in the hole */
   total: number
 }): JSX.Element {
   const c = DONUT_SIZE / 2
@@ -112,7 +112,7 @@ export function CompositionDonut({
         <g transform={`rotate(-90 ${c} ${c})`}>
           {donutSegments(split).map((s) =>
             s.arc <= 0 ? null : (
-              <Tooltip key={s.key} title={`${s.percent}% of what this mob swings for is ${DONUT_TIP[s.key]}`}>
+              <Tooltip key={s.key} title={`${s.percent}% of this mob's full damage is ${DONUT_TIP[s.key]}`}>
                 <circle
                   data-testid={`stance-donut-${s.key}`}
                   cx={c}
@@ -147,7 +147,7 @@ export function CompositionDonut({
           {formatNum(total)}
         </Typography>
         <Typography variant="caption" color="text.secondary" sx={{ fontSize: 9, lineHeight: 1.3 }}>
-          swung for
+          full damage
         </Typography>
       </Box>
     </Box>
@@ -232,7 +232,7 @@ function ComparisonBar({ b }: { b: StanceBar }): JSX.Element {
 /** The stance's name, the tag it wears, and what it costs you — the text half of one bar. */
 function ComparisonLabels({ b }: { b: StanceBar }): JSX.Element {
   const color = ROLE_COLOR[b.role]
-  const tag = b.role === 'hold' ? 'hold this' : b.role === 'survive' ? 'survive only' : b.free ? 'no upkeep' : ''
+  const tag = b.role === 'hold' ? 'wear this' : b.role === 'survive' ? 'survive only' : b.free ? 'no upkeep' : ''
   // A long bar has no room after it, so its tag moves inside the bar's own right end rather than
   // overrunning the value gutter.
   const place = b.wPct > TAG_INSIDE_AT ? { right: 4 } : { left: `${b.wPct}%`, ml: '4px' }
@@ -288,7 +288,8 @@ function ComparisonLabels({ b }: { b: StanceBar }): JSX.Element {
  * the raw arithmetic against essentially every mob, and the whole correction this tab exists to
  * make is that the arithmetic's winner is not the page's answer. Green marks `advice.sustained`,
  * amber marks `advice.emergency`, everything else is grey, and the dashed rule on the right is
- * 100%: what the mob swings for with nothing taken off it.
+ * 100%: the full hit, with nothing taken off it. The caption says endurance is not in the numbers
+ * because the log never shows it — the same claim the survive block makes, said once here too.
  */
 export function StanceComparisonChart({ row }: { row: StanceTargetRow }): JSX.Element | null {
   const chart = stanceBars(row.ranked)
@@ -296,8 +297,8 @@ export function StanceComparisonChart({ row }: { row: StanceTargetRow }): JSX.El
   return (
     <Box data-testid="stance-chart-comparison">
       <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.35 }}>
-        Damage you would take, by stance — full width is what it swings for, un-reduced. Raw
-        arithmetic; endurance is not in it.
+        Every stance you can wear, and how much of the mob&apos;s damage each one lets through.
+        Lower is better. Endurance cost is not included — the log never shows it.
       </Typography>
       <Box sx={{ position: 'relative' }}>
         <svg

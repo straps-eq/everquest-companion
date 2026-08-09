@@ -4,11 +4,11 @@
 //
 // The obvious control for "pick one of N" is a Select, and it is the wrong one here. Choosing a
 // target is not choosing a name: a d0 fetid fiend and a d2 fetid fiend are different fights that
-// must never pool (shared/stanceAdvice.ts), the answer is only as good as the pooled hit count
-// behind it, "20m ago" and "just now" are different questions, and a target you are actively
-// MIS-STANCED against is the one thing on this page that is urgent. That is five facts per entry,
-// and a dropdown can show them only after a click — which means the user has to open the menu to
-// find out whether opening the menu was worth it.
+// must never pool (shared/stanceAdvice.ts), the answer is only as good as the number of hits
+// measured behind it, "20m ago" and "just now" are different questions, and a target you are in
+// the WRONG STANCE against is the one thing on this page that is urgent. That is five facts per
+// entry, and a dropdown can show them only after a click — which means the user has to open the
+// menu to find out whether opening the menu was worth it.
 //
 // A standing list shows all five at rest, keeps the mismatch markers visible while the detail
 // panel is being read, and — because the ledger is ordered most-recently-hit first — puts what you
@@ -17,8 +17,8 @@
 //
 // ── WHAT AN ENTRY MAY AND MAY NOT SAY ───────────────────────────────────────────────────────
 //
-// Everything here is read off the built row; nothing is re-derived. `advice.hits` is the POOLED
-// count (evasive samples excluded — see `unmitigate`), so an entry reading "0 usable hits" is not
+// Everything here is read off the built row; nothing is re-derived. `advice.hits` is the MEASURED
+// count (evasive samples excluded — see `unmitigate`), so an entry reading "nothing usable" is not
 // a bug and must not be hidden: that target has been hitting you and the app can say nothing about
 // how hard, which is a fact worth showing rather than a row worth dropping. It is only barred from
 // being the DEFAULT selection (stanceRows.ts `defaultTargetKey`).
@@ -103,7 +103,7 @@ function SelectorEntry({
           variant="caption"
           sx={{ fontSize: 10, color: usable ? 'text.secondary' : SURVIVE_COLOR, fontWeight: usable ? 400 : 700 }}
         >
-          {usable ? `${row.advice.hits} hits pooled` : 'no usable hits'}
+          {usable ? `${row.advice.hits} hits` : 'nothing usable'}
         </Typography>
         <Box sx={{ flexGrow: 1 }} />
         <Typography variant="caption" color="text.disabled" sx={{ fontSize: 10, whiteSpace: 'nowrap' }}>

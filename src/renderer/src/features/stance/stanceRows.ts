@@ -64,9 +64,16 @@ export function splitPct(magicalShare: number | null): { physical: number; magic
   return { physical: 100 - magical, magical }
 }
 
-/** How a stance key reads on screen. `''` is the ledger's real "nothing was committed" bucket. */
+/**
+ * How a stance key reads on screen.
+ *
+ * `''` is the ledger's real bucket for hits taken before the log ever printed a stance change. It
+ * reads "Stance not known" rather than "No stance committed": "committed" is the log's word for
+ * the line the game prints on a switch, and on screen it lands as an accusation — the player
+ * reads it as something HE failed to do, when the fact is only that the app has not been told.
+ */
 export function stanceLabel(stanceKey: string): string {
-  if (stanceKey === '') return 'No stance committed'
+  if (stanceKey === '') return 'Stance not known'
   return STANCE_EFFECTS[stanceKey.toLowerCase()]?.name ?? stanceKey
 }
 
@@ -74,27 +81,27 @@ export function stanceLabel(stanceKey: string): string {
  * ONE RAW OBSERVATION, and the correction applied to it.
  *
  * This is the row behind the "show me the observations" expander, and it exists so the
- * un-mitigation is LEGIBLE rather than merely claimed: the sample says what the log printed
- * (physical/magical/hits as they landed), the multipliers say what was divided out, and
- * `unmitigated` is the result that went into the pool. A refused sample carries `null` and says
- * why — `unmitigate` returns null for an endurance-gated stance because a hit that got past a
- * 95% evade is full-sized, not 5%-sized.
+ * scaling up is LEGIBLE rather than merely claimed: the sample says what the log printed
+ * (physical/magical/hits as they landed), the multipliers say what the hit was scaled up by, and
+ * `unmitigated` is the full-damage result that went into the pool. A left-out sample carries
+ * `null` and says why — `unmitigate` returns null for a stance that can fail when endurance runs
+ * out, because a hit that got past a 95% evade is full-sized, not 5%-sized.
  */
 export interface SampleRow {
   stanceKey: string
   stanceLabel: string
   hits: number
-  /** as observed, post-mitigation */
+  /** as observed, after the stance reduced it */
   observed: DamageProfile
-  /** the multipliers divided out; 1/1 for the no-stance bucket */
+  /** the multipliers scaled back out; 1/1 for the no-stance bucket */
   multiplier: DamageProfile
-  /** what the mob swung for, or null when the sample was refused */
+  /** the full hit, or null when the sample was left out */
   unmitigated: DamageProfile | null
   /** true when this sample contributed NOTHING to the pooled profile */
   refused: boolean
 }
 
-/** Every sample the ledger holds for a target, un-mitigated the same way `pooledProfile` does. */
+/** Every sample the ledger holds for a target, scaled up the same way `pooledProfile` does. */
 export function sampleRows(samples: readonly StanceSample[]): SampleRow[] {
   return samples.map((s) => {
     const observed = { physical: s.physical, magical: s.magical }
@@ -113,17 +120,17 @@ export function sampleRows(samples: readonly StanceSample[]): SampleRow[] {
 
 /** Why a caveat is on screen. The kind is the stable handle; the text is what the user reads. */
 export type CaveatKind =
-  /** nothing usable was measured — every sample was refused, or there are none */
+  /** nothing usable was measured — every sample was left out, or there are none */
   | 'nothing'
-  /** fewer than MIN_CONFIDENT_HITS pooled hits: reported, never recommended */
+  /** fewer than MIN_CONFIDENT_HITS hits measured: reported, never recommended */
   | 'thin'
   /** the survive-mode option's reduction can fail for a reason the log cannot show */
   | 'gated'
-  /** hits were dropped from the pool, and how many */
+  /** hits were left out of the pool, and how many */
   | 'evaded'
-  /** the loadout has no defensive stance to rank at all */
+  /** your classes have no defensive stance to rank at all */
   | 'noStances'
-  /** the loadout ranks something, but every option it ranks can fail — nothing is holdable */
+  /** your classes rank something, but every option can fail — there is no stance to wear */
   | 'noSustained'
 
 /**
@@ -138,10 +145,10 @@ export type CaveatKind =
  *     the difference between a measurement and a recommendation; `nothing` and `noStances` are
  *     here because without them the card is simply blank and looks broken.
  *   * `survive` — rendered INSIDE the survive-mode block, where the thing it qualifies is. The
- *     endurance-gated warning is still fully visible text; it has just stopped being an Alert
- *     floating above advice it does not apply to.
+ *     endurance warning is still fully visible text; it has just stopped being an Alert floating
+ *     above advice it does not apply to.
  *   * `chip` — a short colored chip with the whole sentence on hover. Only `evaded`, which
- *     explains a number (the dropped hits) that is already on screen next to it.
+ *     explains a number (the hits left out) that is already on screen next to it.
  */
 export type CaveatDisplay = 'banner' | 'survive' | 'chip'
 
@@ -161,11 +168,11 @@ export interface StanceCaveat {
   text: string
 }
 
-/** The "thin sample" sentence — shared by the caveat and the card's headline chip. */
+/** The "not enough hits yet" sentence — shared by the caveat and the card's headline chip. */
 function thinText(hits: number): string {
   return (
-    `Thin sample: ${String(hits)} pooled hit${hits === 1 ? '' : 's'}, under the ${String(MIN_CONFIDENT_HITS)} ` +
-    'this needs to have an opinion. This is what the log has seen so far, not a recommendation.'
+    `Only ${String(hits)} hit${hits === 1 ? '' : 's'} measured so far (needs ${String(MIN_CONFIDENT_HITS)}). ` +
+    'This is what the log has seen, not advice yet.'
   )
 }
 
@@ -173,10 +180,10 @@ function thinText(hits: number): string {
  * The endurance sentence, and the reason it is a whole sentence rather than a chip.
  *
  * Evasive's 0.05 is arithmetically dominant, so it wins essentially every ranking it appears in
- * — on a 95% evade that "will fail if you have insufficient endurance", and THE LOG NEVER PRINTS
+ * — on a 95% evade that "will fail if you have insufficient endurance", and THE LOG NEVER SHOWS
  * ENDURANCE: not a pool, not a tick, not a failure. So the app cannot verify the number the raw
- * arithmetic just put at the top of the list is sustainable for one more second, and it has to
- * say so where that number is, not behind a hover.
+ * arithmetic just put at the top of the list is one you can keep up, and it has to say so where
+ * that number is, not behind a hover. The sentence says it in those words.
  *
  * It is `display: 'survive'` rather than `'banner'` for exactly that reason: it now renders
  * inside the survive-mode block, attached to the stance it is about, instead of floating above a
@@ -185,35 +192,34 @@ function thinText(hits: number): string {
  */
 function gatedText(name: string): string {
   return (
-    `${name}'s 95% evade is ENDURANCE-GATED — the wiki says evasion fails when endurance runs out, ` +
-    'and it charges two endurance for every point it evades. The log never prints endurance, so ' +
-    'this app cannot tell you whether you can hold it for one more second. That is why it is ' +
-    'offered as survive mode and never as the standing recommendation.'
+    `${name} blocks 95% of everything, but it burns 2 endurance for every point it stops and ` +
+    'stops working when endurance runs out. The log never shows endurance, so the app cannot ' +
+    'tell you if you can keep it up — which is why it is offered as survive mode and never as ' +
+    'the stance to wear.'
   )
 }
 
 /**
- * The loadout whose ONLY defensive option can fail.
+ * The classes whose ONLY defensive option can fail.
  *
- * `bestSustained` returns null here, and the honest answer is "there is no stance to stand in",
- * not "here is the gated one anyway". Falling back to the gated pick would rebuild exactly the
+ * `bestSustained` returns null here, and the honest answer is "there is no stance to wear", not
+ * "here is the gated one anyway". Falling back to the gated pick would rebuild exactly the
  * behaviour the split was made to remove — with the added insult of doing it silently.
  */
 function noSustainedText(): string {
   return (
-    'No standing recommendation: every defensive stance this loadout can wear against it is ' +
-    'endurance-gated, so there is nothing here you can simply hold. Survive mode is the only ' +
-    'option the ranking has, and it is not a substitute for one.'
+    'No stance to recommend: every defensive stance your classes can wear against this one can ' +
+    'fail when endurance runs out. Survive mode is all the list has, and it is not a substitute.'
   )
 }
 
-/** The dropped-hits sentence. `stances` names the refused buckets so it is checkable. */
+/** The left-out-hits sentence. `stances` names the buckets it dropped, so it is checkable. */
 function evadedText(hits: number, stances: readonly string[]): string {
   const worn = stances.length > 0 ? ` (worn: ${stances.join(', ')})` : ''
   return (
-    `${String(hits)} hit${hits === 1 ? '' : 's'} left out of this profile${worn}: a hit that gets past a 95% ` +
-    'evade is full-sized, not 5%-sized, so dividing it back out would invent a monster twenty ' +
-    'times too big. Evasive samples measure nothing about how hard this mob hits.'
+    `${String(hits)} hit${hits === 1 ? '' : 's'} left out${worn}: a hit that gets through a 95% evade is ` +
+    'full-sized, not 5%-sized, so scaling it back up would invent a mob twenty times too big. ' +
+    'Hits taken in Evasive say nothing about how hard this one hits.'
   )
 }
 
@@ -221,7 +227,7 @@ function evadedText(hits: number, stances: readonly string[]): string {
  * Every reservation this advice carries, in the order the card shows them.
  *
  * `refusedStances` comes from the sample rows rather than being re-derived, so the names in the
- * dropped-hits sentence are the same buckets the observations table shows as refused.
+ * hits-left-out sentence are the same buckets the observations table shows as left out.
  */
 export function caveatsFor(advice: StanceAdvice, refusedStances: readonly string[]): StanceCaveat[] {
   const out: StanceCaveat[] = []
@@ -232,11 +238,11 @@ export function caveatsFor(advice: StanceAdvice, refusedStances: readonly string
       tone: 'info',
       short: 'nothing usable',
       text:
-        'Nothing usable measured yet. Every hit this mob has landed on you arrived while an ' +
-        'endurance-gated stance was worn, so none of them says how hard it hits.'
+        'Nothing usable yet. Every hit this mob has landed on you came while you were in Evasive, ' +
+        'and those say nothing about how hard it hits.'
     })
   } else if (!advice.confident) {
-    out.push({ kind: 'thin', display: 'banner', tone: 'warn', short: 'thin sample', text: thinText(advice.hits) })
+    out.push({ kind: 'thin', display: 'banner', tone: 'warn', short: 'not enough hits', text: thinText(advice.hits) })
   }
   // AGAINST `advice.sustained`, never `ranked[0]`: the ranking is honest arithmetic and Evasive
   // heads it almost everywhere, so a caveat keyed on the ranking's winner was really a caveat
@@ -246,7 +252,7 @@ export function caveatsFor(advice: StanceAdvice, refusedStances: readonly string
       kind: 'noSustained',
       display: 'banner',
       tone: 'warn',
-      short: 'no holdable stance',
+      short: 'no stance to wear',
       text: noSustainedText()
     })
   }
@@ -256,7 +262,7 @@ export function caveatsFor(advice: StanceAdvice, refusedStances: readonly string
       kind: 'gated',
       display: 'survive',
       tone: 'warn',
-      short: 'endurance-gated',
+      short: 'needs endurance',
       text: gatedText(gated.effect.name)
     })
   }
@@ -265,7 +271,7 @@ export function caveatsFor(advice: StanceAdvice, refusedStances: readonly string
       kind: 'evaded',
       display: 'chip',
       tone: 'warn',
-      short: `${String(advice.evadedHitsIgnored)} hit${advice.evadedHitsIgnored === 1 ? '' : 's'} dropped`,
+      short: `${String(advice.evadedHitsIgnored)} hit${advice.evadedHitsIgnored === 1 ? '' : 's'} left out`,
       text: evadedText(advice.evadedHitsIgnored, refusedStances)
     })
   }
@@ -276,8 +282,8 @@ export function caveatsFor(advice: StanceAdvice, refusedStances: readonly string
       tone: 'info',
       short: 'no defensive stance',
       text:
-        'This class loadout has no defensive stance to rank — the offensive stances say nothing ' +
-        'about incoming damage, so they are left out rather than ranked last.'
+        'Your classes have no defensive stance to rank. Offensive stances say nothing about ' +
+        'incoming damage, so they are left out rather than ranked last.'
     })
   }
   return out
@@ -292,11 +298,11 @@ export function caveatsAt(caveats: readonly StanceCaveat[], display: CaveatDispl
 export interface RankedRow {
   key: string
   name: string
-  /** expected damage taken as a share of the un-mitigated total (0.62) */
+  /** expected damage taken as a share of the full hit (0.62) */
   fraction: number
   /** that share, printed ('62%') */
   percent: string
-  /** expected damage taken, in points, over the pooled profile */
+  /** expected damage taken, in points, over the measured damage mix */
   expected: number
   /**
    * This row IS `advice.sustained` — the stance to actually wear.
@@ -344,7 +350,7 @@ export interface StanceTargetRow {
   /** 'D2 · Adaptive' (lib/tierChip — main's TIER_LABELS is not importable here) */
   tierLabel: string
   lastSeenTs: number
-  /** the single biggest landed hit, AS OBSERVED — never un-mitigated */
+  /** the single biggest landed hit, AS OBSERVED — never scaled back up */
   biggestHit: number
   advice: StanceAdvice
   ranked: RankedRow[]
@@ -353,9 +359,9 @@ export interface StanceTargetRow {
   /** `advice.emergency` as a row — the escape hatch, drawn apart from the recommendation. */
   emergency: RankedRow | null
   samples: SampleRow[]
-  /** the split of the un-mitigated profile, as two integers summing to 100; null if unmeasured */
+  /** the full-damage mix, as two integers summing to 100; null if nothing was measured */
   split: { physical: number; magical: number } | null
-  /** how many samples actually reached the pool — "corrected across N stances you wore" */
+  /** how many samples were measured and used — "the stance you had on at the time", counted */
   usedSamples: number
   mismatch: StanceMismatch | null
   caveats: StanceCaveat[]
@@ -471,13 +477,13 @@ export function visibleTargets(
 /**
  * THE HEADLINE, as words — and the one place the split is turned into a sentence.
  *
- * `stance` is `advice.sustained` and nothing else. There is deliberately no fallback: a loadout
- * whose only defensive option is endurance-gated gets `null` and a heading that says there is no
- * standing recommendation, because quietly promoting the gated option would rebuild the very
+ * `stance` is `advice.sustained` and nothing else. There is deliberately no fallback: classes
+ * whose only defensive option can fail when endurance runs out get `null` and a heading that says
+ * there is no stance to wear, because quietly promoting the gated option would rebuild the very
  * behaviour the player corrected ("it isn't always the best, it's like temp/survive mode").
  */
 export interface StanceCallout {
-  /** the stance to wear, or null when nothing in this loadout can be held against this mob */
+  /** the stance to wear, or null when nothing your classes can wear holds up against this mob */
   stance: RankedRow | null
   /** the two or three words above the name — 'Wear', 'Stay in', or the refusal */
   heading: string
@@ -490,19 +496,19 @@ export function calloutFor(row: StanceTargetRow): StanceCallout {
   if (!s) {
     return {
       stance: null,
-      heading: 'No standing recommendation',
+      heading: 'No stance to wear',
       detail:
         row.advice.ranked.length === 0
-          ? 'There is no defensive stance here to rank — see the note above.'
-          : 'Every option this loadout ranks can fail when endurance runs out, so none of them is a stance you can simply stand in.'
+          ? 'You have no defensive stance here to rank — see the note above.'
+          : 'Every stance your classes can wear here can fail when endurance runs out, so there is none you can just stay in.'
     }
   }
   return {
     stance: s,
     heading: s.current ? 'Stay in' : 'Wear',
     detail:
-      `${s.name} is the best stance you can HOLD against this: it takes ${s.percent} of what the mob ` +
-      'swings for, and its reduction does not fail when endurance runs out.'
+      `${s.name} is the best stance you can wear all fight against this: you take ${s.percent} of what ` +
+      'it hits for before your stance, and it does not fail when endurance runs out.'
   }
 }
 
@@ -512,8 +518,8 @@ export function calloutFor(row: StanceTargetRow): StanceCallout {
  */
 export function surviveLine(e: RankedRow): string {
   return (
-    `${e.name} would take ${e.percent} of it — pop it to live through a spike and then drop back. ` +
-    'It is an escape hatch, not a stance to stand in.'
+    `${e.name} would take ${e.percent} of the full hit. Pop it to live through a spike, then drop ` +
+    'back — it is an escape hatch, not the stance to wear.'
   )
 }
 
@@ -528,8 +534,8 @@ export function mismatchLine(m: StanceMismatch): string {
   const current = STANCE_EFFECTS[m.currentKey]?.name ?? m.currentKey
   const best = STANCE_EFFECTS[m.bestKey]?.name ?? m.bestKey
   return (
-    `You are in ${current}: against ${m.target.mobName} that takes ${pct(m.currentFraction)} of what it ` +
-    `swings for. ${best} would take ${pct(m.bestFraction)} — ${pct(m.gain)} of its damage, gone.`
+    `You are in ${current}: against ${m.target.mobName} you take ${pct(m.currentFraction)} of the full hit. ` +
+    `${best} would take ${pct(m.bestFraction)} — ${pct(m.gain)} of its damage, gone.`
   )
 }
 

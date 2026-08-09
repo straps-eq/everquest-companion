@@ -1,4 +1,4 @@
-// OBSERVED vs RECOVERED — the un-mitigation, made visible.
+// WHAT LANDED vs THE FULL HIT — the scaling back up, made visible.
 //
 // Split out of StanceCharts.tsx for file mass alone; it draws the third of the three pictures the
 // ledger's shape licenses and shares that file's palette, its HTML label layer and its geometry
@@ -7,17 +7,17 @@
 // ── WHY THIS CHART IS THE INTERESTING ONE ───────────────────────────────────────────────────
 //
 // Every other number on this page rests on a correction the user cannot see: damage is measured
-// AFTER the stance reduced it, so each sample is divided by the multipliers of the stance it was
-// taken in before it joins the pool (shared/stances.ts `unmitigate`). That step is the reason the
-// physical/magical split means anything at all — the same Cazic-Thule reads 64.7% spell from
-// inside Defensive and 37.9% from inside Mage Hunter — and it is exactly the kind of step a
+// AFTER the stance reduced it, so each sample is scaled back up by the multipliers of the stance
+// it was taken in before it joins the pool (shared/stances.ts `unmitigate`). That step is the
+// reason the physical/magical mix means anything at all — the same Cazic-Thule reads 64.7% spell
+// from inside Defensive and 37.9% from inside Mage Hunter — and it is exactly the kind of step a
 // surface can get silently wrong.
 //
-// So it is drawn. Each stance sample gets two bars: what LANDED (pale) over what the mob was
-// SWUNG FOR (solid), per hit, in the page's two damage-class hues. The pale bars differ because
-// the stances differ; the solid bars are supposed to CONVERGE, and the dashed rule is the pooled
-// average they are converging on. A solid bar far off that rule is a sample dragging the profile
-// — visible here, and nameable in the observations table directly underneath.
+// So it is drawn. Each stance sample gets two bars: what LANDED (pale) over the FULL HIT (solid),
+// per hit, in the page's two damage-class hues. The pale bars differ because the stances differ;
+// the solid bars are supposed to CONVERGE, and the dashed rule is the average they are converging
+// on. A solid bar far off that rule is a sample dragging the damage mix — visible here, and
+// nameable in the observations table directly underneath.
 
 import type { JSX } from 'react'
 import { Box, Typography } from '@mui/material'
@@ -36,7 +36,7 @@ import {
 } from './stanceChartGeometry'
 import type { StanceTargetRow } from './stanceRows'
 
-/** How long the dashed stub that stands in for a refused recovery is, in user units. */
+/** How long the dashed stub that stands in for a left-out sample is, in user units. */
 const REFUSED_STUB_W = 46
 
 /** One bar, split into its physical and magical halves. */
@@ -56,7 +56,7 @@ function SplitSpan({ y, span, opacity }: { y: number; span: RecoverySpan; opacit
   )
 }
 
-/** One sample: what landed (pale, on top) over what it was swung for (solid, beneath). */
+/** One sample: what landed (pale, on top) over the full hit (solid, beneath). */
 function RecoveryBars({ r }: { r: RecoveryRow }): JSX.Element {
   return (
     <g data-testid="stance-recovery-row" data-stance={r.stanceKey} data-refused={r.refused ? '1' : '0'}>
@@ -64,9 +64,9 @@ function RecoveryBars({ r }: { r: RecoveryRow }): JSX.Element {
       {r.recovered ? (
         <SplitSpan y={r.recoveredY} span={r.recovered} opacity={0.95} />
       ) : (
-        // A refused sample draws a dashed stub where its recovered bar would be. The HOLE is the
-        // statement: a hit that got past a 95% evade is full-sized, not 5%-sized, so there is
-        // nothing here to recover and an absent bar says so louder than an absent row would.
+        // A left-out sample draws a dashed stub where its full-hit bar would be. The HOLE is the
+        // statement: a hit that got through a 95% evade is full-sized, not 5%-sized, so there is
+        // nothing here to scale up and an absent bar says so louder than an absent row would.
         <line
           x1={PLOT_X}
           x2={PLOT_X + REFUSED_STUB_W}
@@ -82,11 +82,11 @@ function RecoveryBars({ r }: { r: RecoveryRow }): JSX.Element {
   )
 }
 
-/** The stance a sample was taken in, and the size of the correction applied to it. */
+/** The stance a sample was taken in, and how far it was scaled up. */
 function RecoveryLabels({ r }: { r: RecoveryRow }): JSX.Element {
   const tip =
     `${r.hits} hit${r.hits === 1 ? '' : 's'} in ${r.label}: ${formatNum(r.landed.total)} landed per hit, ` +
-    `${formatNum(r.recovered?.total ?? 0)} swung for`
+    `${formatNum(r.recovered?.total ?? 0)} full damage`
   return (
     <OverlayRow
       top={r.y}
@@ -99,7 +99,7 @@ function RecoveryLabels({ r }: { r: RecoveryRow }): JSX.Element {
       value={
         r.lift === null ? (
           <Typography variant="caption" sx={{ fontSize: 10, color: SURVIVE_COLOR, fontWeight: 700 }}>
-            refused
+            left out
           </Typography>
         ) : (
           // The lift IS the reciprocal of the multiplier that was divided out, so it is the one
@@ -142,10 +142,10 @@ export function RecoverySamplesChart({ row }: { row: StanceTargetRow }): JSX.Ele
   return (
     <Box data-testid="stance-chart-recovery">
       <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.35 }}>
-        Per landed hit, in each stance you wore — pale is what landed, solid is what it swung for
+        Per hit, in each stance you wore: pale is what landed, solid is the full hit
         {chart.pooledPerHit === null
           ? '.'
-          : `. The dashed rule is the pooled ${formatNum(chart.pooledPerHit)} a hit those recoveries agree on.`}
+          : `. The dashed line is ${formatNum(chart.pooledPerHit)} per hit — the figure the stances agree on once each is scaled up. Solid bars should land near it.`}
       </Typography>
       <Box sx={{ position: 'relative' }}>
         <svg

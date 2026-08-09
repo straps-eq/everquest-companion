@@ -33,13 +33,14 @@
 // is the stance you WEAR, amber is the one you POP. Those two colors are also the comparison
 // chart's, so the legend up here is what makes that chart readable without a key of its own.
 //
-// THE LOADOUT IS INFERRED, and the header says so. `availableStances` comes from the class-combo
-// module's current interval, which deliberately OVER-OFFERS while the combo is unresolved (every
-// candidate class contributes its stances — main/data/stanceLoadout.ts). Presenting that list as
-// "your stances" would be presenting a guess as a fact, which is world-model law 1's exact
-// prohibition. The confidence itself is not on this wire (the payload carries three fields and no
-// combo interval), so the label is qualitative and points at the Overview's loadout card rather
-// than inventing a number.
+// THE CLASSES ARE INFERRED, and the caption under the chips says so in the same breath as the
+// chips. `availableStances` comes from the class-combo module's current interval, which
+// deliberately OVER-OFFERS while the combo is unresolved (every candidate class contributes its
+// stances — main/data/stanceLoadout.ts). The heading is the plain "Stances you can wear:" and the
+// line immediately beneath it is what keeps that from being a guess presented as a fact (world-
+// model law 1): it says the list comes from the classes the app THINKS you are and that a stance
+// you cannot use may appear. The confidence itself is not on this wire (the payload carries three
+// fields and no combo interval), so that sentence is qualitative rather than inventing a number.
 
 import { type JSX, useMemo, useState } from 'react'
 import { Alert, Box, Chip, Paper, Stack, Typography } from '@mui/material'
@@ -61,7 +62,8 @@ import StanceTargetCard from './StanceTargetCard'
  * Two colors carry the whole correction this tab exists to make — green is the stance you WEAR,
  * amber is the one you POP — and a color the user has to infer from context is a color that gets
  * inferred wrong once. The comparison chart in the panel below is drawn in exactly these two hues
- * plus grey, so this one line is that chart's key as well as the page's.
+ * plus grey, so this one line is that chart's key as well as the page's. Both labels use the
+ * page's own words ("the stance to wear", "survive mode") rather than a second vocabulary.
  */
 function SplitLegend(): JSX.Element {
   return (
@@ -69,7 +71,7 @@ function SplitLegend(): JSX.Element {
       <Stack direction="row" spacing={0.5} alignItems="center">
         <ShieldMoonIcon sx={{ fontSize: 15, color: HOLD_COLOR }} />
         <Typography variant="caption" sx={{ color: HOLD_COLOR, fontWeight: 700 }}>
-          the stance to hold
+          the stance to wear
         </Typography>
       </Stack>
       <Stack direction="row" spacing={0.5} alignItems="center">
@@ -79,14 +81,14 @@ function SplitLegend(): JSX.Element {
         </Typography>
       </Stack>
       <Typography variant="caption" color="text.secondary">
-        Evasive&apos;s 95% evade wins the raw arithmetic against almost everything, and it is
-        endurance-gated — so it is offered as an escape hatch, never as the standing answer.
+        Evasive lets the least damage through against almost everything, but it can fail when
+        endurance runs out, so it is offered as an escape hatch and never as the stance to wear.
       </Typography>
     </Stack>
   )
 }
 
-/** The two inputs, stated: the stance worn right now, and the stances this loadout can wear. */
+/** The two inputs, stated: the stance worn right now, and the stances your classes can wear. */
 function LoadoutHeader({
   currentStance,
   availableStances,
@@ -125,14 +127,14 @@ function LoadoutHeader({
           <Chip
             size="small"
             color="warning"
-            label={`${String(mismatches)} target${mismatches === 1 ? '' : 's'} you are mis-stanced against`}
+            label={`${String(mismatches)} target${mismatches === 1 ? '' : 's'} you are in the wrong stance against`}
             sx={{ fontWeight: 700 }}
           />
         )}
       </Stack>
       <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mt: 1 }}>
         <Typography variant="body2" color="text.secondary">
-          Ranking over your inferred loadout:
+          Stances you can wear:
         </Typography>
         {availableStances.length === 0 ? (
           <Typography variant="body2" color="text.secondary">
@@ -151,8 +153,8 @@ function LoadoutHeader({
         )}
       </Stack>
       <Typography variant="caption" color="text.secondary">
-        Those are the stances your INFERRED class combo can wear — while the combo is unresolved
-        the list is deliberately too wide, so a stance you cannot actually use may be ranked.
+        Based on the classes the app thinks you are. While it is still unsure it offers too many,
+        so a stance you cannot actually use may appear.
       </Typography>
       <SplitLegend />
     </Paper>
@@ -164,9 +166,9 @@ function EmptyState({ currentStance }: { currentStance: string | null }): JSX.El
   return (
     <Alert severity="info" data-testid="stance-empty">
       Nothing has hit you yet this session. The moment a mob lands damage on you it gets an entry
-      in the list here, keyed by mob, zone and instance tier — a d0 fight and a d2 fight are not
-      the same fight and are never pooled.
-      {currentStance === null && ' No stance change has been printed this session either.'}
+      in the list here, one per mob, zone and instance tier — a d0 fight and a d2 fight are not
+      the same fight and are never counted together.
+      {currentStance === null && ' The log has not printed a stance change this session either.'}
     </Alert>
   )
 }
@@ -207,8 +209,8 @@ function MasterDetail({
         <StanceTargetCard key={selected.key} row={selected} />
         {picked !== null && !rows.some((r) => r.key === picked) && (
           <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
-            The target you had open is no longer in the ledger — it aged out, or the character
-            changed. Showing the most recent measured target instead.
+            The target you had open is gone — it aged out of the list, or you switched character.
+            Showing the most recent measured target instead.
           </Typography>
         )}
       </Box>

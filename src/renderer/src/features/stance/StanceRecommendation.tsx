@@ -19,8 +19,8 @@
 // wrong one of the two as "the answer".
 //
 // There is NO fallback from one to the other. When `advice.sustained` is null the callout says
-// there is no standing recommendation and the survive strip stands alone; promoting the gated
-// pick into the empty headline would silently rebuild exactly what was just removed.
+// there is no stance to wear and the survive strip stands alone; promoting the gated pick into
+// the empty headline would silently rebuild exactly what was just removed.
 
 import type { JSX } from 'react'
 import { Box, Chip, Stack, Typography } from '@mui/material'
@@ -56,9 +56,10 @@ function StanceTags({ s }: { s: RankedRow }): JSX.Element {
  * THE RECOMMENDATION — `advice.sustained`, and the biggest thing on the card.
  *
  * The percentage is the large figure because it is the number that decides whether switching is
- * worth a global cooldown mid-fight, and it is phrased as damage TAKEN ("62% of what it swings
- * for") rather than as a reduction: "50% reduction" and "takes 50%" are the same sentence for
- * Defensive's melee half and different sentences for everything else.
+ * worth a global cooldown mid-fight, and it is phrased as damage TAKEN ("62% of the full hit")
+ * rather than as a reduction: "50% reduction" and "takes 50%" are the same sentence for
+ * Defensive's melee half and different sentences for everything else. The sentence under it is
+ * where "full hit" is spelled out in full — "what it hits for before your stance".
  */
 export function Recommendation({ row }: { row: StanceTargetRow }): JSX.Element {
   const c = calloutFor(row)
@@ -95,7 +96,7 @@ export function Recommendation({ row }: { row: StanceTargetRow }): JSX.Element {
               {c.stance.percent}
             </Typography>
             <Typography variant="caption" color="text.secondary">
-              of what it swings for
+              of the full hit
             </Typography>
           </Stack>
         )}

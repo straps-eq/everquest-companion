@@ -127,7 +127,7 @@ test('SC: an empty ranking is an empty chart, not a zero-height frame with a rul
 
 test('SC: role comes from sustained/emergency — NEVER from position in the ranking', () => {
   // Evasive's 0.05 heads the raw arithmetic against essentially every mob. It must be drawn as
-  // survive mode; the green "hold this" bar is Defensive, further down the list.
+  // survive mode; the green "wear this" bar is Defensive, further down the list.
   const t = target({ samples: [fatSample('defensive', 1000, 200)] })
   const row = buildStanceRow(t, payload([t], 'balanced'))
   const chart = stanceBars(row.ranked)

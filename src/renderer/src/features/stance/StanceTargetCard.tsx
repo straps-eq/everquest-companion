@@ -9,17 +9,17 @@
 // out of the shared advice layer. What lives here is the ORDER, and the order is an argument:
 //
 //   1. the mismatch callout, when there is one — it is the only thing here that is urgent;
-//   2. the BANNER caveats — BEFORE the answer, deliberately. A thin sample or a loadout with
-//      nothing holdable in it is a reason to read what follows differently, and a reservation
-//      printed underneath the answer it qualifies is a reservation nobody reads (AGENTS.md's
-//      tooltip diet cuts the other way for exactly this class of statement: it is not
-//      source-caveating, it is the finding);
+//   2. the BANNER caveats — BEFORE the answer, deliberately. Too few hits measured, or classes
+//      with no wearable stance in them, is a reason to read what follows differently, and a
+//      reservation printed underneath the answer it qualifies is a reservation nobody reads
+//      (AGENTS.md's tooltip diet cuts the other way for exactly this class of statement: it is
+//      not source-caveating, it is the finding);
 //   3. the recommendation — `advice.sustained`, the stance you actually wear;
 //   4. survive mode — `advice.emergency`, deliberately separate and deliberately quieter;
 //   5. the stance comparison chart — the page's central claim, and now its real chart
 //      (StanceCharts.tsx). It kept the `stance-rank-row` testid the DOM bar list it replaced had;
-//   6. the damage composition, which is the evidence for 3 and 4, as a donut;
-//   7. observed-vs-recovered, which is the evidence for 6 (StanceRecoveryChart.tsx);
+//   6. the damage mix, which is the evidence for 3 and 4, as a donut;
+//   7. what landed vs the full hit, which is the evidence for 6 (StanceRecoveryChart.tsx);
 //   8. the raw observations, collapsed.
 //
 // 5 MOVED ABOVE 6. The ranking used to sit under the composition because it was a list; as the
@@ -132,15 +132,15 @@ function CaveatChips({ caveats }: { caveats: readonly StanceCaveat[] }): JSX.Ele
   )
 }
 
-/** The un-mitigation, said once per card in one line, above the numbers it produced. */
+/** The scaling back up, said once per card in one line, above the numbers it produced. */
 function CorrectionLine({ row }: { row: StanceTargetRow }): JSX.Element {
   return (
     <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap>
       <Typography variant="caption" color="text.secondary">
         {row.usedSamples > 0
-          ? `Corrected for the ${String(row.usedSamples)} stance${row.usedSamples === 1 ? '' : 's'} you were ` +
-            'wearing when it landed, so this split is what the mob swings for.'
-          : 'Nothing here has been corrected — no usable sample reached the pool.'}
+          ? 'These are full-damage numbers: each hit was scaled back up to undo the stance you had ' +
+            'on at the time, so a mob measured in two stances reads the same either way.'
+          : 'Nothing has been scaled back up here — no usable hits measured.'}
       </Typography>
       <CaveatChips caveats={row.caveats} />
     </Stack>

@@ -6,14 +6,14 @@
 //
 // ── WHY THE OBSERVATIONS TABLE IS ON THE PAGE AT ALL ────────────────────────────────────────
 //
-// Every number in the breakdown above it is UN-MITIGATED: divided by the multipliers of whatever
-// stance was worn when it was measured. That correction is the only reason the physical/magical
-// split means anything — the same Cazic-Thule reads 64.7% spell from inside Defensive and 37.9%
-// from inside Mage Hunter, purely because each stance shrinks a different half of the same
+// Every number in the breakdown above it is FULL DAMAGE: scaled back up by the multipliers of
+// whatever stance was worn when it was measured. That step is the only reason the physical/
+// magical mix means anything — the same Cazic-Thule reads 64.7% spell from inside Defensive and
+// 37.9% from inside Mage Hunter, purely because each stance shrinks a different half of the same
 // attack pattern (shared/stances.ts `unmitigate`). A surface that silently applied that and
 // showed one clean number would be asking to be trusted about the most load-bearing step in the
-// feature. So the raw observations stay one click away, with the multiplier that was divided out
-// printed beside each one, and a refused sample says REFUSED rather than quietly vanishing.
+// feature. So the raw observations stay one click away, with the multiplier each hit was scaled
+// up by printed beside it, and a dropped sample says "left out" rather than quietly vanishing.
 
 import { type JSX, useState } from 'react'
 import {
@@ -44,7 +44,7 @@ function Pair({ physical, magical }: { physical: number; magical: number }): JSX
   )
 }
 
-/** The three figures under the ring: what was pooled, the worst single hit, the estimated total. */
+/** The three figures under the ring: what was measured, the worst single hit, the full total. */
 function BreakdownFigures({ row }: { row: StanceTargetRow }): JSX.Element {
   const { advice } = row
   return (
@@ -53,7 +53,7 @@ function BreakdownFigures({ row }: { row: StanceTargetRow }): JSX.Element {
         <Box component="b" sx={{ color: 'text.primary' }}>
           {advice.hits}
         </Box>{' '}
-        hits pooled
+        hits measured
       </Typography>
       <Typography variant="caption" color="text.secondary">
         biggest landed{' '}
@@ -62,7 +62,7 @@ function BreakdownFigures({ row }: { row: StanceTargetRow }): JSX.Element {
         </Box>
       </Typography>
       <Typography variant="caption" color="text.secondary">
-        est. swung for{' '}
+        full damage (est.){' '}
         <Box component="b" sx={{ color: 'text.primary' }}>
           {formatNum(advice.profile.physical + advice.profile.magical)}
         </Box>
@@ -73,16 +73,16 @@ function BreakdownFigures({ row }: { row: StanceTargetRow }): JSX.Element {
 
 /**
  * The headline breakdown: how many hits, how big the worst one was, and the physical/magical
- * split of what the mob SWINGS FOR.
+ * DAMAGE MIX of the full hit.
  *
- * The split is now a DONUT (StanceCharts.tsx) rather than the two-segment strip that used to sit
+ * The mix is now a DONUT (StanceCharts.tsx) rather than the two-segment strip that used to sit
  * here — same two hues, same per-half tooltips, but the ring's hole carries the estimated total,
  * so the size and the shape of the incoming damage are one object instead of a bar and a footnote
  * six lines apart. The strip's legend survives as `CompositionLegend`, beside it.
  *
- * `biggestHit` is deliberately the OBSERVED figure — the ledger stores it un-corrected, and it
- * is the one number here a player can check against his own screen. The split beside it is the
- * corrected one, and the row says so in three words rather than a footnote.
+ * `biggestHit` is deliberately the figure AS IT LANDED — the ledger stores it un-scaled, and it
+ * is the one number here a player can check against his own screen. The mix beside it is the
+ * scaled-up one, and the correction line under it says so.
  */
 export function DamageBreakdown({ row }: { row: StanceTargetRow }): JSX.Element {
   const { advice, split } = row
@@ -99,7 +99,7 @@ export function DamageBreakdown({ row }: { row: StanceTargetRow }): JSX.Element 
       ) : (
         <Stack spacing={0.5}>
           <Typography variant="body2" color="text.secondary">
-            No usable split yet.
+            No usable damage mix yet.
           </Typography>
           <BreakdownFigures row={row} />
         </Stack>
@@ -108,7 +108,7 @@ export function DamageBreakdown({ row }: { row: StanceTargetRow }): JSX.Element 
   )
 }
 
-/** One observation row: what landed, what was divided out, what went into the pool. */
+/** One observation row: what landed, what it was scaled up by, what went into the pool. */
 function ObservationRow({ s }: { s: SampleRow }): JSX.Element {
   return (
     <TableRow hover>
@@ -125,7 +125,7 @@ function ObservationRow({ s }: { s: SampleRow }): JSX.Element {
           <Pair physical={s.unmitigated.physical} magical={s.unmitigated.magical} />
         ) : (
           <Box component="span" sx={{ color: 'warning.main' }}>
-            refused
+            left out
           </Box>
         )}
       </TableCell>
@@ -136,9 +136,10 @@ function ObservationRow({ s }: { s: SampleRow }): JSX.Element {
 /**
  * The per-stance observations, behind an expander that NAMES what it holds.
  *
- * The trigger says how many stances were corrected for rather than "details", because that count
- * is itself the claim being backed up: "pooled from 3 stances you wore" is only meaningful if you
- * can see the three.
+ * The trigger says how many observations there are rather than "details", because that count is
+ * itself the claim being backed up: "measured in 3 stances you wore" is only meaningful if you
+ * can see the three. The two damage columns print physical / magical, and the line above the
+ * table says so once instead of widening every header.
  */
 export function Observations({ row }: { row: StanceTargetRow }): JSX.Element | null {
   const [open, setOpen] = useState(false)
@@ -152,18 +153,21 @@ export function Observations({ row }: { row: StanceTargetRow }): JSX.Element | n
         sx={{ textTransform: 'none' }}
         data-testid="stance-observations-toggle"
       >
-        {row.samples.length} raw observation{row.samples.length === 1 ? '' : 's'}, and the correction applied
+        {row.samples.length} raw observation{row.samples.length === 1 ? '' : 's'}, and how each was scaled up
       </Button>
       <Collapse in={open} unmountOnExit>
         <Paper variant="outlined" sx={{ mt: 0.5, p: 1 }}>
+          <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.3 }}>
+            Damage reads physical / magical.
+          </Typography>
           <Table size="small" sx={{ '& td, & th': { py: 0.4, fontSize: 12 } }}>
             <TableHead>
               <TableRow>
                 <TableCell>Stance worn</TableCell>
                 <TableCell align="right">hits</TableCell>
-                <TableCell align="right">landed (phys / mag)</TableCell>
-                <TableCell align="right">divided out</TableCell>
-                <TableCell align="right">swung for (est.)</TableCell>
+                <TableCell align="right">landed</TableCell>
+                <TableCell align="right">scaled up by</TableCell>
+                <TableCell align="right">full damage (est.)</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
