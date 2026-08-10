@@ -9,10 +9,10 @@
 // Both charts are a fixed 720-unit viewBox drawn at `width="100%"` with
 // `preserveAspectRatio="none"`, so X stretches to the panel and Y is 1:1. Right for a bar, ruinous
 // for a glyph — so the labels ride an absolutely positioned HTML layer whose gutters are the same
-// fractions of the width the geometry reserved. This is StanceCharts.tsx's `OverlayRow`, and it is
-// RE-SPELLED here rather than imported for exactly one reason: that component's gutters are the
-// stance geometry's constants (132/108) and these charts reserve their own (184/112, because a
-// zone name carries an instance suffix). Importing it would lay the text over the wrong columns.
+// fractions of the width the geometry reserved. That frame (`ChartFrame` + `OverlayRow`) used to
+// live here, re-spelled from StanceCharts.tsx because the stance gutters are its own constants;
+// it now lives in ./moteChartFrame.tsx with the two gutters as props, because the tab grew a THIRD
+// chart (the upgrade curve) and three copies of one layout is a copy too far.
 //
 // ── COLORS ARE BORROWED, NEVER INVENTED ─────────────────────────────────────────────────────
 //
@@ -29,9 +29,9 @@ import { CAT_COLOR } from '../combat/combatShared'
 import { fmtDuration } from '../leveling/levelChartGeometry'
 import { NONE } from '../leveling/rangeStatsRows'
 import { zoneColor } from '../leveling/zoneBands'
+import { ChartFrame, OverlayRow } from './moteChartFrame'
 import {
   BAR_H,
-  CHART_W,
   LABEL_PCT,
   PLOT_W,
   VALUE_PCT,
@@ -51,70 +51,8 @@ export const COUNT_COLOR = CAT_COLOR.dot
 /** A row that was observed but never measured — no active time to divide by. */
 const UNMEASURED_COLOR = '#8891a0'
 
-/** One row of text laid over the plot: left gutter, the plot span itself, right gutter. */
-function OverlayRow({
-  top,
-  height,
-  label,
-  value,
-  mid
-}: {
-  top: number
-  height: number
-  label: JSX.Element
-  value: JSX.Element
-  /** positioned inside the plot span, which is `position: relative` for exactly this */
-  mid?: JSX.Element
-}): JSX.Element {
-  return (
-    <Box sx={{ position: 'absolute', left: 0, right: 0, top, height, display: 'flex', alignItems: 'center' }}>
-      <Box sx={{ width: `${LABEL_PCT}%`, pr: 0.6, minWidth: 0, display: 'flex', alignItems: 'center', gap: 0.4 }}>
-        {label}
-      </Box>
-      <Box sx={{ flexGrow: 1, position: 'relative', height: '100%' }}>{mid}</Box>
-      <Box
-        sx={{
-          width: `${VALUE_PCT}%`,
-          pl: 0.6,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'flex-end',
-          gap: 0.5
-        }}
-      >
-        {value}
-      </Box>
-    </Box>
-  )
-}
-
-/** The stretched SVG plus its upright HTML label layer — the shape both charts on this page take. */
-function ChartFrame({
-  testid,
-  height,
-  bars,
-  labels
-}: {
-  testid: string
-  height: number
-  bars: JSX.Element
-  labels: JSX.Element
-}): JSX.Element {
-  return (
-    <Box sx={{ position: 'relative' }} data-testid={testid}>
-      <svg
-        viewBox={`0 0 ${CHART_W} ${height}`}
-        width="100%"
-        height={height}
-        preserveAspectRatio="none"
-        style={{ display: 'block' }}
-      >
-        {bars}
-      </svg>
-      <Box sx={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>{labels}</Box>
-    </Box>
-  )
-}
+/** This tab's two gutters, bound once — every `OverlayRow` on this page reserves the same pair. */
+const GUTTERS = { labelPct: LABEL_PCT, valuePct: VALUE_PCT } as const
 
 // ── WHERE TO FARM ───────────────────────────────────────────────────────────────────────────
 
@@ -142,6 +80,7 @@ function ZoneBarLabels({ b }: { b: ZoneBar }): JSX.Element {
   const span = b.activeMs > 0 ? `over ${fmtDuration(b.activeMs)} active` : 'no active time recorded'
   return (
     <OverlayRow
+      {...GUTTERS}
       top={b.y}
       height={b.h}
       label={
@@ -239,6 +178,7 @@ function LadderBarShape({ b }: { b: LadderBar }): JSX.Element {
 function LadderBarLabels({ b }: { b: LadderBar }): JSX.Element {
   return (
     <OverlayRow
+      {...GUTTERS}
       top={b.y}
       height={BAR_H}
       label={

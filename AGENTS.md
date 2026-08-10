@@ -1727,6 +1727,13 @@ of it is upstream's concern, and it is kept in one block so it is trivially drop
   `Remove-Item Env:ELECTRON_RUN_AS_NODE -ErrorAction SilentlyContinue; npm run dev`
   A plain PowerShell window opened outside the IDE does not need it. The same
   applies to `npm run test:e2e`, which launches Electron the same way.
+- **BASELINE UPDATE 2026-08-10: it is now 20/22, and `maps` PASSES.** The suite
+  grew to 22 specs (upstream's `maps-loc` + `maps-pin`) and upstream's map work
+  incidentally fixed the canvas-buffer assertion described below, so `maps` is
+  off the list. Two DPI failures remain, `whats-new` and `toast`. Watch for
+  `overview` as a THIRD apparent failure in a full run — it is the documented
+  parallel-load flake three items down, and it goes 1/1 green in isolation
+  (seen again 2026-08-10). Re-run it alone before believing it.
 - **THREE E2E SPECS FAIL ON THIS MACHINE FOR ONE REASON: DISPLAY SCALING.** The
   monitor is 5120x1440 physical at **122%**, so Electron reports a work area of
   4197x1141 — exactly 5120/1.22 and 1392/1.22 — and `devicePixelRatio` is

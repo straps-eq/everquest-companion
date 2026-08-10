@@ -21,6 +21,15 @@
 // So the only reason to condense above lesser is to clear an ITEM TIER LIMIT — a pile of Majors
 // cannot touch a tier-5 item at any quantity, and one Greater can. For SPELLS, which accept any
 // tier, condensing is pure loss.
+//
+// ── AND THE LIMIT IS NOW STATED BEFORE IT IS USED ───────────────────────────────────────────
+//
+// "Clear an item tier limit" is the condensing table's whole justification and the page never said
+// what those limits WERE. `MoteTierRules` (./MoteTierRules.tsx) is that mapping — one row per rung,
+// what it may be used on, how far it can carry an item, and whether you have any — and it sits
+// ABOVE the condensing table here rather than in its own panel because the two are one argument
+// read top to bottom: here is what each mote can touch, and here is what it costs to trade up when
+// it cannot touch the thing you want to upgrade.
 
 import type { JSX } from 'react'
 import {
@@ -38,6 +47,8 @@ import {
 } from '@mui/material'
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome'
 import { CONDENSE_RATIO, MOTE_RULE_OF_THUMB, condenseTable, type CondenseOutcome } from '@shared/motes'
+import type { MoteLadderRow } from '@shared/moteFarming'
+import { MoteTierRules } from './MoteTierRules'
 
 const CELL_SX = { py: 0.4, fontSize: 12 } as const
 const HEAD_SX = { ...CELL_SX, fontWeight: 700, whiteSpace: 'nowrap' } as const
@@ -138,7 +149,7 @@ function WorstTradeWarning({ worst }: { worst: CondenseOutcome | undefined }): J
  * turn into" needs to find the Major row where the ladder puts it, and the loss column climbing
  * monotonically down the page IS the shape of the advice.
  */
-export function MoteSpendAdvice(): JSX.Element {
+export function MoteSpendAdvice({ ladder }: { ladder: readonly MoteLadderRow[] }): JSX.Element {
   const table = condenseTable()
   const worst = table.reduce<CondenseOutcome | undefined>(
     (w, o) => (!w || lossFraction(o) > lossFraction(w) ? o : w),
@@ -151,6 +162,10 @@ export function MoteSpendAdvice(): JSX.Element {
       </Typography>
       <Stack spacing={1}>
         <RuleOfThumb />
+        {/* The mapping FIRST: the condensing table below argues about clearing an item tier limit,
+            which is only meaningful once you can see what each rung's limit is. The ladder counts
+            are the page's own (`moteFarming.ladder`), passed down rather than re-derived. */}
+        <MoteTierRules ladder={ladder} />
         <WorstTradeWarning worst={worst} />
         <Box>
           <Stack direction="row" spacing={0.75} alignItems="center" sx={{ mb: 0.5 }} flexWrap="wrap" useFlexGap>

@@ -9,9 +9,15 @@
 //   b. WHAT YOU'VE GOT — the ten rungs, count and exp, with the total banked.
 //   c. WHO DROPS THEM — top source mobs with a raid-target marker, and the raid-target pattern
 //      stated as the tendency it is (with its counter-examples named).
-//   d. SPEND ADVICE — the guide's rule of thumb and the condensing table, whose exp-loss column is
-//      the single most actionable thing on the tab.
-//   e. THE LEVEL CLAIM — the wiki's player-level ceiling, shown as a claim and shown refuted.
+//   d. WHAT EXPERIENCE BUYS — the tier curve every price on this page is quoted in. It answers the
+//      one word the page used everywhere and never defined ("exp?"), so it comes BEFORE the advice
+//      that spends it and after the log-derived panels that count it.
+//   e. SPEND ADVICE — the rule of thumb, the mote → tier mapping ("which mote upgrades what"), and
+//      the condensing table whose exp-loss column is the single most actionable thing on the tab.
+//   f. ITEMS OR SPELLS — the rule of thumb turned into arithmetic (a duplicate is worth a whole
+//      tier step; a mote is worth at most 10, ever), with the unverifiable spell-effect table
+//      behind an expander.
+//   g. THE LEVEL CLAIM — the wiki's player-level ceiling, shown as a claim and shown refuted.
 //
 // TWO SOURCES OF TRUTH, AND THE PAGE SAYS WHICH IS WHICH. The PRICES (rung, exp, item tier limit,
 // condensing arithmetic) are the eqlwiki Mote Guide's, hand-authored in `shared/motes.ts` and
@@ -31,6 +37,8 @@ import { useMoteFarming, type MoteFarmingView } from './useMoteFarming'
 import { MoteLadderChart, MoteZoneChart } from './MoteCharts'
 import { MoteSources } from './MoteSources'
 import { MoteSpendAdvice } from './MoteSpendAdvice'
+import { MoteXpCurve } from './MoteXpCurve'
+import { MoteItemsVsSpells } from './MoteItemsVsSpells'
 import { MoteLevelClaim } from './MoteLevelClaim'
 
 /** The header's at-a-glance counters. Exp first, because exp is the currency. */
@@ -140,10 +148,14 @@ export default function MotesView({ onOpenMob }: MotesViewProps = {}): JSX.Eleme
         </>
       )}
 
-      {/* The two wiki-sourced panels render whether or not anything has dropped — they are the
-          advice half, and a player with no motes yet is exactly the one who benefits from reading
-          the condensing table BEFORE they have a pile of Infinitesimals to ruin. */}
-      <MoteSpendAdvice />
+      {/* The wiki-sourced panels render whether or not anything has dropped — they are the advice
+          half, and a player with no motes yet is exactly the one who benefits from reading what
+          experience buys, and the condensing table, BEFORE they have a pile of Infinitesimals to
+          ruin. The spend panel takes the ladder counts so its mote → tier table can highlight the
+          rungs this character has actually seen; with none, every row simply reads plain. */}
+      <MoteXpCurve />
+      <MoteSpendAdvice ladder={view.data.ladder} />
+      <MoteItemsVsSpells />
       <MoteLevelClaim evidence={view.data.levelEvidence} />
     </Stack>
   )

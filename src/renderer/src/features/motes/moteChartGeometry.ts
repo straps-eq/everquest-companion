@@ -16,6 +16,11 @@
 //      One measured quantity per zone, ranked. This is the page's actual answer.
 //   2. WHAT YOU'VE GOT (`ladderBars`) — the ten rungs, each with how many you have and what they
 //      are worth. TWO bars per rung, and see `ladderBars` for why they are on separate scales.
+//   3. WHAT EXPERIENCE BUYS (`tierCostBars`) — the one chart here that is not made of the log at
+//      all. It is the wiki's upgrade curve (`shared/moteUpgrades.ts UPGRADE_TIERS`), which is a
+//      fixed eleven-row table and not a measurement, so it has no sample size, no span and no
+//      scale question: full width is the 512 the last step costs, always. It is drawn rather than
+//      tabulated because the SHAPE is the advice — see `tierCostBars`.
 //
 // ── COORDINATES ─────────────────────────────────────────────────────────────────────────────
 //
@@ -28,6 +33,7 @@
 // `PLOT_X`/`PLOT_W` pair below.
 
 import type { MoteLadderRow, MoteZoneRow } from '@shared/moteFarming'
+import type { UpgradeTier } from '@shared/moteUpgrades'
 
 /** The shared viewBox width of both charts. */
 export const CHART_W = 720
@@ -236,4 +242,96 @@ export function ladderBars(rows: readonly MoteLadderRow[]): LadderChart {
 function subBarW(value: number, max: number, seen: boolean): number {
   if (!seen || max <= 0) return 0
   return Math.max(MIN_BAR_W, (value / max) * PLOT_W)
+}
+
+// ── WHAT EXPERIENCE BUYS: THE UPGRADE CURVE ─────────────────────────────────────────────────
+
+/**
+ * The curve's rows are shorter than a farming row and there are eleven of them, so they get their
+ * own height rather than the page's 20.
+ *
+ * A tier row carries one word ("+4"), one bar and two short numbers — no zone name, no instance
+ * suffix, no two-line sample caption — and eleven of those at the ranked charts' pitch would add
+ * nearly 300px of reference material to a page that is already long. 18 units of pitch keeps the
+ * whole curve inside one screenful beside the table it is explaining.
+ */
+export const CURVE_BAR_H = 14
+const CURVE_BAR_GAP = 4
+
+/** One tier of the shared item/spell curve, positioned. Every number is `moteUpgrades.ts`'s. */
+export interface TierCostBar {
+  /** the tier itself, 0..10 — the app writes an item's tier as `+N` (itemStats `itemTierFromName`) */
+  tier: number
+  /** experience to advance OUT of this tier (2^tier); null at the cap, where there is no next */
+  toNextXp: number | null
+  /** experience absorbed IN TOTAL to stand here (2^tier - 1) */
+  totalXp: number
+  /** the item's cumulative stat bonus at this tier, in percent */
+  itemBonusPct: number
+  x: number
+  y: number
+  w: number
+  h: number
+  /** width before `MIN_BAR_W` — the honest number, for tests and for nothing else */
+  rawW: number
+  /** `w` as a percentage of the PLOT (not of the viewBox) */
+  wPct: number
+  /** false at +10: there is no step out of the cap, so there is no bar to draw */
+  advances: boolean
+  textY: number
+}
+
+export interface TierCostChart {
+  bars: TierCostBar[]
+  height: number
+  /** the step cost the full plot width represents — 512, the +9 → +10 step */
+  scaleMax: number
+  /** everything a +10 has absorbed (the last row's `totalXp`), for the caption */
+  totalToMax: number
+}
+
+/**
+ * THE STEP COST PER TIER, LINEARLY — and the near-invisible bars at the top are the point.
+ *
+ * The bar is `toNextXp`, not `totalXp`: the question a player is holding is "what does the next
+ * one cost me", and the totals column answers the other one beside it. Scaled linearly against the
+ * largest step, tiers 0-3 come out at 1, 2, 4 and 8 units against 512 — slivers — and that is an
+ * honest picture of a curve that doubles: the first tiers really are nearly free, and the single
+ * step from +9 to +10 really does cost more than every step before it put together. A log scale
+ * would flatten exactly the fact the chart exists to show, so there is none.
+ *
+ * `MIN_BAR_W` still floors those slivers, for the same reason it does on the farming charts: 1 exp
+ * against 512 is 0.8 units and would render as nothing at all, which reads as "no cost" rather
+ * than "almost none".
+ *
+ * THE CAP ROW IS DRAWN WITH NO BAR. +10 is not a step of size zero; there is no step. Same
+ * treatment an unmeasured zone gets, and for the same reason — a zero-width bar would be a claim.
+ *
+ * Takes the table rather than importing it so the geometry stays pure arithmetic over a passed-in
+ * row set (and so a node test can hand it the wiki's own numbers directly).
+ */
+export function tierCostBars(tiers: readonly UpgradeTier[]): TierCostChart {
+  const scaleMax = tiers.reduce((m, t) => Math.max(m, t.toNextXp ?? 0), 0)
+  const bars = tiers.map((t, i) => {
+    const y = BAR_PAD_Y + i * (CURVE_BAR_H + CURVE_BAR_GAP)
+    const advances = t.toNextXp !== null
+    const rawW = scaleMax > 0 && advances ? ((t.toNextXp ?? 0) / scaleMax) * PLOT_W : 0
+    const w = advances ? Math.max(MIN_BAR_W, rawW) : 0
+    return {
+      tier: t.tier,
+      toNextXp: t.toNextXp,
+      totalXp: t.totalXp,
+      itemBonusPct: t.itemBonusPct,
+      x: PLOT_X,
+      y,
+      w,
+      h: CURVE_BAR_H,
+      rawW,
+      wPct: (w / PLOT_W) * 100,
+      advances,
+      textY: y + CURVE_BAR_H / 2
+    }
+  })
+  const height = bars.length === 0 ? 0 : BAR_PAD_Y * 2 + bars.length * (CURVE_BAR_H + CURVE_BAR_GAP) - CURVE_BAR_GAP
+  return { bars, height, scaleMax, totalToMax: tiers[tiers.length - 1]?.totalXp ?? 0 }
 }
