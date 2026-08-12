@@ -20,7 +20,7 @@
 // point evaded and failing outright when endurance runs out — "temp/survive mode", in the
 // player's words, and the log never shows endurance so the app can never verify otherwise.
 // A split the UI quietly un-splits is worse than no split, so this file pins the renderer's half
-// of it: `calloutFor` reads `advice.sustained` and NEVER falls back to the gated pick, exactly
+// of it: the row's VERDICT reads `advice.sustained` and NEVER falls back to the gated pick, exactly
 // one ranked row is flagged `recommended` (and it is not `ranked[0]` when Evasive is available),
 // and the endurance sentence rides `display: 'survive'` so it renders on the escape hatch rather
 // than over the recommendation.
@@ -35,7 +35,6 @@ import assert from 'node:assert/strict'
 import {
   buildStanceRow,
   buildStanceRows,
-  calloutFor,
   caveatsAt,
   caveatsFor,
   defaultTargetKey,
@@ -70,7 +69,10 @@ function target(over: Partial<TargetProfile> = {}): TargetProfile {
 }
 
 function payload(t: TargetProfile[], current: string | null, stances = LOADOUT): StanceAdvicePayload {
-  return { targets: t, currentStance: current, availableStances: stances }
+  // `offense` is the DPS half of the payload and every row builder in this file is about the
+  // sustain half, so it is empty here rather than stubbed: an empty list is the honest "you have
+  // not hit anything yet", and the sustain rows must not depend on it either way.
+  return { targets: t, offense: [], currentStance: current, availableStances: stances }
 }
 
 /** A sample big enough to clear the confidence gate on its own. */
@@ -195,9 +197,10 @@ test('SR: classes whose ONLY defensive stance can fail have no stance to wear', 
   assert.equal(row.sustained, null)
   assert.ok(row.emergency)
   assert.equal(row.emergency.key, 'evasive')
-  const c = calloutFor(row)
-  assert.equal(c.stance, null, 'the callout must NEVER fall back to the gated pick')
-  assert.match(c.heading, /no stance to wear/i)
+  // The VERDICT must never fall back to the gated pick either — it is the headline now, and a
+  // quiet promotion there would rebuild exactly what `bestSustained` removed.
+  assert.equal(row.verdict.sustain.best, null, 'the verdict must NEVER fall back to the gated pick')
+  assert.equal(row.verdict.sustain.block, 'noneHoldable')
   // …and the refusal is spelled out: the option that IS there can fail when endurance runs out.
   const noSustained = row.caveats.find((cv) => cv.kind === 'noSustained')
   assert.ok(noSustained)
@@ -313,20 +316,25 @@ test('SR: the flagged row is the SUSTAINED pick, never the arithmetic winner', (
   assert.equal(row.emergency, row.ranked[0])
 })
 
-test('SR: the callout names the stance to WEAR, and says whether you are already in it', () => {
+test('SR: the row carries the WORN-vs-BEST verdict, and says which case it is', () => {
+  // This used to assert `calloutFor`'s 'Stay in' / 'Wear' headings. That block is gone: it named
+  // one stance and no baseline, which is the confusion the owner reported. The row now carries the
+  // shared verdict instead, and what has to hold is that it names BOTH stances and the difference.
+  // The sentences themselves are pinned in tests/stanceVerdict.test.mts.
   const t = target({ samples: [fatSample('defensive', 1000, 200)] })
-  const wearing = calloutFor(buildStanceRow(t, payload([t], 'defensive')))
-  assert.ok(wearing.stance)
-  assert.equal(wearing.stance.key, 'defensive')
-  assert.equal(wearing.heading, 'Stay in')
-  const switching = calloutFor(buildStanceRow(t, payload([t], 'balanced')))
-  assert.equal(switching.heading, 'Wear')
-  // The figure the callout prints is the shared layer's own fraction, formatted once.
-  assert.ok(switching.stance)
-  assert.equal(switching.stance.percent, pct(adviseFor(t, LOADOUT).sustained?.fraction ?? -1))
-  // The sentence says this is the one you can keep on all fight, and that it does not fail.
-  assert.match(switching.detail, /best stance you can wear all fight/i)
-  assert.match(switching.detail, /does not fail when endurance runs out/i)
+  const wearing = buildStanceRow(t, payload([t], 'defensive')).verdict.sustain
+  assert.equal(wearing.alreadyBest, true)
+  assert.equal(wearing.worn, 'Defensive')
+  assert.equal(wearing.best, 'Defensive')
+
+  const switching = buildStanceRow(t, payload([t], 'balanced')).verdict.sustain
+  assert.equal(switching.alreadyBest, false)
+  assert.equal(switching.worn, 'Balanced', 'the comparison always names what you are actually in')
+  assert.equal(switching.best, 'Defensive')
+  // The figure is the shared layer's own fraction, never re-derived here.
+  assert.equal(switching.bestFraction, adviseFor(t, LOADOUT).sustained?.fraction)
+  assert.ok(switching.saves !== null && switching.saves > 0, 'and the saving is stated as a number')
+  assert.equal(switching.line, `You are in Balanced and take ${pct(switching.wornFraction ?? -1)} of what it swings for. Defensive would take ${pct(switching.bestFraction ?? -1)} \u2014 that is ${pct(switching.saves)} of its damage gone.`)
 })
 
 test('SR: the survive line describes an action with an end to it, not a place to live', () => {

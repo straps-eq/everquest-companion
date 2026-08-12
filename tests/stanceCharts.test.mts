@@ -58,7 +58,9 @@ function target(over: Partial<TargetProfile> = {}): TargetProfile {
 }
 
 function payload(t: TargetProfile[], current: string | null, stances = LOADOUT): StanceAdvicePayload {
-  return { targets: t, currentStance: current, availableStances: stances }
+  // Empty `offense`: these are the incoming-damage charts, and they must be computable from the
+  // sustain measurements alone.
+  return { targets: t, offense: [], currentStance: current, availableStances: stances }
 }
 
 function fatSample(stanceKey: string, physical: number, magical: number, hits = 200): StanceSample {

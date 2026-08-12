@@ -426,7 +426,8 @@ const OVERLAY_TITLE: Partial<Record<OverlayKind, string>> = {
   events: 'Event Log Overlay',
   'heal-fight': 'Fight Healing Overlay',
   'heal-overall': 'Zone Healing Overlay',
-  toast: 'Celebration Overlay'
+  toast: 'Celebration Overlay',
+  stance: 'Stance Overlay'
 }
 
 /**

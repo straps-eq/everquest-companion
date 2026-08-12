@@ -95,7 +95,13 @@ export const TELEMETRY_OVERLAY_KINDS = [
   'heal-fight',
   'heal-overall',
   'events',
-  'toast'
+  'toast',
+  // The stance advisor's overlay. SAME DEPLOY COUPLING as a new view (see TELEMETRY_VIEWS above):
+  // the enum is closed, the ingest validator is deployed by hand, and a shipped client reporting
+  // a kind the server has not learned fails the whole batch — so shipping the overlay and
+  // widening this list are ONE edit, and the deploy follows. `tests/telemetryContract.test.mts`
+  // pins the parity with OVERLAY_KINDS so it cannot be forgotten.
+  'stance'
 ] as const
 export type TelemetryOverlayKind = (typeof TELEMETRY_OVERLAY_KINDS)[number]
 

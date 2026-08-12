@@ -23,6 +23,7 @@ import { idKey } from '../log/parser'
 import { SEC_RINGS, type EngineFoldProbe } from './foldProbe'
 import { StateTimeline } from './stateTimeline'
 import { StanceLedger } from './stanceLedger'
+import { StanceOffenseLedger } from './stanceOffenseLedger'
 import { StanceAdvisor } from './stanceAdvisor'
 import { CharmModel } from './charmModel'
 import { SpecialAttacks } from './specialAttacks'
@@ -206,6 +207,18 @@ export class EngineState {
    */
   stanceLedger = new StanceLedger()
   /**
+   * WHAT YOU DO TO EACH MOB, PER STANCE (stanceOffenseLedger.ts) — the measurement behind the
+   * DPS half of the stance advisor, and the mirror of the ledger above. SESSION-level and purely
+   * ADDITIVE in exactly the same way: a second index over OUTGOING damage the meter has already
+   * counted, written by the `out-you` branch of the ingest fold, so no damage total moves.
+   *
+   * A SECOND LEDGER RATHER THAN A SECOND FIELD ON THE FIRST, because the first one's golden test
+   * asserts every row it holds appears in the meter's INCOMING list — and a mob you killed
+   * without taking a scratch belongs here and in no incoming list anywhere. The two share the
+   * composite key so a surface can pair them up.
+   */
+  stanceOffense = new StanceOffenseLedger()
+  /**
    * WHEN TO SAY THE MOB WOULD HURT LESS IN ANOTHER STANCE (stanceAdvisor.ts) — the throttle in
    * front of the derived `stanceMismatch` event, and the only piece of this feature that decides
    * anything about TIME. Beside the ledger because it reads nothing else: the measurement above,
@@ -272,6 +285,7 @@ export class EngineState {
     this.slowSamples = []
     this.stateTimeline.reset()
     this.stanceLedger.reset()
+    this.stanceOffense.reset()
     // The arming state goes with the measurement it throttles; the INSTALLED deps do not (they
     // are wiring, and pipeline.ts installs them once, before the first character is tailed).
     this.stanceAdvisor.reset()

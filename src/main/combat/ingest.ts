@@ -201,6 +201,11 @@ function ingestWorld(st: EngineState, ev: LogEvent): boolean {
       // another one's damage, so the ledger is CLEARED rather than censored — unlike a span,
       // a damage sum has no honest truncated form.
       st.stanceLedger.reset()
+      // …and the outgoing twin, for the same reason read the other way round: its rows say "I hit
+      // this mob this hard", where "I" is a weapon, a level and a class loadout the rebirth
+      // replaced. Ranking THIS character's stances off the beta character's swings would be the
+      // same mistake in the other direction.
+      st.stanceOffense.reset()
       // …and the advice throttle in front of it. Its arms say "we already told THIS character
       // about that mob"; after a rebirth that is a sentence about somebody else, and leaving it
       // standing would silence the first real advice the new character earns.
@@ -445,6 +450,41 @@ function foldStanceLedger(st: EngineState, ev: DamageEvent, at: Attribution, fee
   if (p) p.leave()
 }
 
+/**
+ * WHAT YOU ARE DOING TO THIS MOB, filed under the stance you are wearing
+ * (stanceOffenseLedger.ts) — the exact mirror of `foldStanceLedger` above.
+ *
+ * Gated on `at.kind === 'out-you'`, which is the SAME verdict `route()` just acted on, so the
+ * ledger's admission set is exactly the `you` row's on the outgoing meter. Purely additive: a
+ * second index over damage already counted, moving no total (law 8's tripwire).
+ *
+ * YOURS ONLY — never a pet's and never a group member's, which is what `out-you` buys over the
+ * broader `out-*` verdicts. Your stance does not reach your pet's claws, so pooling its damage in
+ * would rank your stances off somebody else's swings.
+ *
+ * THE DEFENDER'S RAW NAME goes in, not `world.label()`: the label carries the spawn-generation
+ * ` (N)` suffix, which is display flavor and never identity (law 2). The ledger keys it the same
+ * way its incoming twin keys the attacker, so the two rows join on one composite key.
+ *
+ * There is deliberately NO advisor riding this call. The incoming side alerts because taking
+ * avoidable damage is urgent; "you could be doing more damage" is a standing fact about a fight
+ * you are already winning, and an alert for it would be noise. This surface is pull-only.
+ */
+function foldStanceOffense(st: EngineState, ev: DamageEvent, at: Attribution): void {
+  if (at.kind !== 'out-you') return
+  const p = st.probe
+  if (p) p.enter(SEC_ANALYTICS)
+  st.stanceOffense.note({
+    mobName: ev.target,
+    zone: st.zone,
+    stance: st.stance?.name,
+    dtype: ev.dtype,
+    amount: ev.amount,
+    ts: ev.ts
+  })
+  if (p) p.leave()
+}
+
 /** YOUR avoided swing. It is still a swing ATTEMPT, and the mechanical proc denominator is
  *  attempts — a proc that cannot fire on a miss still had the chance to. */
 function foldMissAnalytics(st: EngineState, ev: MissEvent): void {
@@ -500,6 +540,11 @@ function ingestDamage(st: EngineState, ev: DamageEventE, live: boolean): void {
   const delta = st.current === encBefore ? (st.current?.activeMs ?? 0) - activeBefore : 0
   foldDamageAnalytics(st, dmgEv, delta, at)
   foldStanceLedger(st, dmgEv, at, { seq: ev.seq, live })
+  // The outgoing twin, off the SAME verdict and the same event: one of the two gates matches, or
+  // neither does (a pet's hit, a member's hit and an ignored line reach both and are refused by
+  // both). It is fed the lane-named event for the same reason its sibling is — one damage record
+  // per line, indexed twice, never re-derived.
+  foldStanceOffense(st, dmgEv, at)
 }
 
 /**

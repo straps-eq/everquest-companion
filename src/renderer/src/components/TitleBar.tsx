@@ -178,6 +178,13 @@ function OverlayMenu({ overlayState }: { overlayState: Record<OverlayKind, boole
           <Checkbox size="small" edge="start" checked={overlayState.events} tabIndex={-1} disableRipple />
           <ListItemText primary="Event log" secondary="Alerts, notable loot, quest completions" />
         </MenuItem>
+        {/* The STANCE advisor — the other non-meter kind. Its rows are MOBS rather than damage
+            sources, and it answers the two questions the Stances tab answers at length: which
+            stance takes the least damage from this thing, and which deals the most to it. */}
+        <MenuItem dense onClick={() => { toggle('stance') }}>
+          <Checkbox size="small" edge="start" checked={overlayState.stance} tabIndex={-1} disableRipple />
+          <ListItemText primary="Stances" secondary="Best stance per mob: sustain and damage" />
+        </MenuItem>
       </Menu>
     </Box>
   )

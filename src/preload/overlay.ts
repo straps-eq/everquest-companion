@@ -13,6 +13,8 @@ import type {
 } from '../shared/types'
 import { OVERLAY_KINDS } from '../shared/types'
 import type { ToastPayload } from '../shared/toast'
+// The stance advisor's wire shape — the 'stance' overlay's whole data source.
+import type { StanceAdvicePayload } from '../shared/stanceAdvice'
 
 export type { CombatSnapshot, SnapshotOpts, OverlayConfig, OverlayDrill, OverlayKind, MobKnowledge }
 
@@ -66,6 +68,17 @@ const overlayApi = {
     ipcRenderer.on(IPC.onModuleDelta, listener)
     return () => ipcRenderer.removeListener(IPC.onModuleDelta, listener)
   },
+  /**
+   * THE STANCE ADVISOR'S ONE READ (`combat:stanceAdvice`) — the measurements, the stance worn now
+   * and the stances this character can wear, in one payload because every consumer joins all of
+   * them (shared/stanceAdvice.ts). The 'stance' overlay's whole data source.
+   *
+   * It is NOT on the combat snapshot, deliberately: that snapshot is polled once a second by every
+   * open meter, and this list grows with the session's bestiary rather than with the snapshot's
+   * payload caps. Advice is not a meter reading — the same argument main/ipc/stanceAdvice.ts makes.
+   */
+  getStanceAdvice: (): Promise<StanceAdvicePayload> => ipcRenderer.invoke(IPC.getStanceAdvice),
+
   /** Item knowledge for the feed's hover card — cache-first in main, never rejects. */
   lookupItem: (name: string): Promise<ItemKnowledge> => ipcRenderer.invoke(IPC.itemsLookup, name),
   /** Mob knowledge for a CONSIDER row's hover card (Task #63) — same cache-first door. */

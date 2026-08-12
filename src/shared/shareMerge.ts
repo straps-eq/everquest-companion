@@ -198,6 +198,9 @@ const OVERLAY_KIND_LABEL: Record<OverlayKind, string> = {
   'heal-fight': 'Healing (fight)',
   'heal-overall': 'Healing (overall)',
   events: 'Event feed',
+  // Named for the same reason the toast is: this map is keyed by the WHOLE union, so a kind that
+  // never appears in a shared bundle still needs a label or the type stops compiling.
+  stance: 'Stance advisor',
   // The toast strip has no bgAlpha row to share today (src/main/share.ts's KINDS list
   // does not include it), but the label map is keyed by the whole union, so it is named here
   // rather than letting a future shared field render as a raw kind id.

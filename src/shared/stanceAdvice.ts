@@ -34,6 +34,7 @@ import {
 // the pair is a type-level cycle and never a runtime one — the same construction alertGroups.ts
 // and alertGroupsRefused.ts use, for the same reason.
 import type { LogEventBase } from './logEvents'
+import type { OffenseProfile } from './stanceOffense'
 
 /** Landed damage against you from one target, while wearing one stance. */
 export interface StanceSample {
@@ -192,6 +193,21 @@ export interface StanceMismatch {
 export interface StanceAdvicePayload {
   /** every (mob, zone, tier) that has hit you this session, most-recently-hit first */
   targets: TargetProfile[]
+  /**
+   * THE OTHER HALF OF THE QUESTION (shared/stanceOffense.ts): every (mob, zone, tier) YOU have
+   * damaged this session, with your damage split by the stance you were wearing — the measurement
+   * behind "which stance helps my DPS against this one".
+   *
+   * A SEPARATE LIST, NOT A FIELD ON `targets`, and the two are NOT the same set: a mob that beat
+   * on you while you cast at something else appears above and not here, and a mob you burned down
+   * untouched appears here and not above. They share the composite (mobKey, zoneBase, tier) key,
+   * so a surface pairs them by key and must handle either side being absent.
+   *
+   * It rides the SAME payload for the reason the other three fields do: `rankOffense` and
+   * `rankStances` are two readings of one instant, and a DPS answer computed against a loadout
+   * read a tick later describes a character who existed at neither.
+   */
+  offense: OffenseProfile[]
   /** lowercase stance key currently worn, or null when none was ever committed */
   currentStance: string | null
   /**

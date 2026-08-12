@@ -44,6 +44,12 @@ import { adviseFor, detectMismatch, MIN_CONFIDENT_HITS } from '../../../../share
 import type { StanceAdvice, StanceAdvicePayload, StanceMismatch, StanceSample, TargetProfile } from '../../../../shared/stanceAdvice'
 import { mitigationFor, STANCE_EFFECTS, unmitigate } from '../../../../shared/stances'
 import type { DamageProfile } from '../../../../shared/stances'
+// THE TWO ANSWERS IN WORDS (shared/stanceVerdict.ts). The card used to assemble the "you are in X,
+// Y would save you Z" comparison out of pieces that were each on screen separately — which is the
+// confusion the owner reported. It is one sentence now, decided in shared so the stance OVERLAY
+// cannot phrase it differently, and carried on the row like everything else the card renders.
+import { mobKeyOf, mobVerdict } from '../../../../shared/stanceVerdict'
+import type { MobVerdict } from '../../../../shared/stanceVerdict'
 import { tierStyle } from '../../lib/tierChip'
 
 /** A fraction (0.617) as the panel prints it ('62%'). Rounded, never truncated. */
@@ -367,6 +373,12 @@ export interface StanceTargetRow {
   caveats: StanceCaveat[]
   /** the stance worn right now IS one this mob was measured in */
   currentStanceKey: string | null
+  /**
+   * BOTH ANSWERS FOR THIS MOB, as sentences: the sustain comparison against the stance actually
+   * worn, and the measured DPS pick with what it costs. Computed by the shared layer from this
+   * target and its OFFENSE twin (paired on `key`), so the card renders text and decides nothing.
+   */
+  verdict: MobVerdict
 }
 
 /**
@@ -381,8 +393,12 @@ export function buildStanceRow(target: TargetProfile, payload: StanceAdvicePaylo
   const advice = adviseFor(target, payload.availableStances)
   const samples = sampleRows(target.samples)
   const ranked = rankedRows(advice, payload.currentStance)
+  const key = mobKeyOf(target)
+  // The OFFENSE row for the same mob, or undefined — the two ledgers are separate sets and a mob
+  // that has hit you without your landing a blow on it legitimately has no outgoing row at all.
+  const offense = payload.offense.find((o) => mobKeyOf(o) === key)
   return {
-    key: `${target.mobKey}|${target.zoneBase}|${String(target.tier)}`,
+    key,
     mobName: target.mobName,
     zoneBase: target.zoneBase,
     tier: target.tier,
@@ -403,7 +419,8 @@ export function buildStanceRow(target: TargetProfile, payload: StanceAdvicePaylo
       advice,
       samples.filter((s) => s.refused).map((s) => s.stanceLabel)
     ),
-    currentStanceKey: payload.currentStance
+    currentStanceKey: payload.currentStance,
+    verdict: mobVerdict({ target, offense }, payload.availableStances, payload.currentStance)
   }
 }
 
@@ -474,43 +491,12 @@ export function visibleTargets(
   return selected ? [...head, selected] : head
 }
 
-/**
- * THE HEADLINE, as words — and the one place the split is turned into a sentence.
- *
- * `stance` is `advice.sustained` and nothing else. There is deliberately no fallback: classes
- * whose only defensive option can fail when endurance runs out get `null` and a heading that says
- * there is no stance to wear, because quietly promoting the gated option would rebuild the very
- * behaviour the player corrected ("it isn't always the best, it's like temp/survive mode").
- */
-export interface StanceCallout {
-  /** the stance to wear, or null when nothing your classes can wear holds up against this mob */
-  stance: RankedRow | null
-  /** the two or three words above the name — 'Wear', 'Stay in', or the refusal */
-  heading: string
-  /** the sentence under it */
-  detail: string
-}
-
-export function calloutFor(row: StanceTargetRow): StanceCallout {
-  const s = row.sustained
-  if (!s) {
-    return {
-      stance: null,
-      heading: 'No stance to wear',
-      detail:
-        row.advice.ranked.length === 0
-          ? 'You have no defensive stance here to rank — see the note above.'
-          : 'Every stance your classes can wear here can fail when endurance runs out, so there is none you can just stay in.'
-    }
-  }
-  return {
-    stance: s,
-    heading: s.current ? 'Stay in' : 'Wear',
-    detail:
-      `${s.name} is the best stance you can wear all fight against this: you take ${s.percent} of what ` +
-      'it hits for before your stance, and it does not fail when endurance runs out.'
-  }
-}
+// THE HEADLINE USED TO BE BUILT HERE, by a `calloutFor` that returned 'Wear' / 'Stay in' plus one
+// stance and one percentage. It is gone: naming one stance with no baseline is precisely the
+// confusion the owner reported, and the replacement is `shared/stanceVerdict.ts`'s
+// `sustainVerdict`, which names the stance WORN, the stance that would be better and the
+// difference — in every case, including the four where `detectMismatch` refuses to speak. The
+// verdict rides `StanceTargetRow.verdict`; `StanceVerdictBlock.tsx` renders it.
 
 /**
  * The survive-mode sentence. Phrased as an ACTION with an end to it ("pop … then drop back"),

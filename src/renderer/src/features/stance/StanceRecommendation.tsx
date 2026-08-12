@@ -1,7 +1,18 @@
-// THE ANSWER HALF of a target card: the stance to wear, and — kept firmly apart from it — the
-// stance to panic into.
+// SURVIVE MODE — the stance to panic into, kept firmly apart from the stance to wear.
 //
-// ── WHY THIS IS TWO BLOCKS AND NOT A RANKING WITH A WINNER ──────────────────────────────────
+// ── WHAT USED TO BE HERE ────────────────────────────────────────────────────────────────────
+//
+// This file also held `Recommendation`, the card's old headline: a success-toned callout reading
+// "Wear Defensive — you take 59% of the full hit". It is gone, because it named ONE stance and no
+// baseline — the owner's report was that the tab is confusing, and a percentage with nothing to
+// compare it against is the reason. `StanceVerdictBlock.tsx` replaced it with the comparison
+// itself ("you are in Mage Hunter and take 70%; Defensive would take 60%"), stated in every case
+// including the ones where it cannot be stated, and with the DAMAGE answer beside it.
+//
+// What survives here is the half that block deliberately does NOT absorb: survive mode is a
+// different KIND of answer and has to keep looking like one.
+//
+// ── WHY SURVIVE MODE IS ITS OWN BLOCK AND NOT A RANKING WITH A WINNER ───────────────────────
 //
 // Evasive's "95% chance to evade all incoming attacks" is 0.05 against every damage class, so it
 // beats every other stance in the arithmetic against essentially every mob in the game. That is
@@ -11,102 +22,25 @@
 // The player said it plainly: it "isn't always the best, it's like temp/survive mode".
 //
 // `shared/stances.ts` answered that by splitting the question rather than fudging the numbers
-// (`bestSustained` / `bestEmergency`), and this file is where that split becomes something you
-// can see across a room. The recommendation is a SUCCESS-toned callout carrying `advice.sustained`
-// and a large figure. Survive mode is a smaller, dashed, WARNING-toned strip that names an action
-// with an end to it. Different color, different weight, different border style, different verb —
-// three redundant signals, because the whole failure mode being corrected is a user reading the
-// wrong one of the two as "the answer".
+// (`bestSustained` / `bestEmergency`), and this file is where that split stays visible across a
+// room. Survive mode is a smaller, dashed, WARNING-toned strip that names an action with an end to
+// it — different color, different weight, different border style, different verb from the verdict
+// block above it. Three redundant signals, because the whole failure mode being corrected is a
+// user reading survive mode as "the answer".
 //
-// There is NO fallback from one to the other. When `advice.sustained` is null the callout says
-// there is no stance to wear and the survive strip stands alone; promoting the gated pick into
-// the empty headline would silently rebuild exactly what was just removed.
+// There is NO fallback from one to the other. When `advice.sustained` is null the verdict says
+// there is no stance to wear and this strip stands alone; promoting the gated pick into the empty
+// headline would silently rebuild exactly what was removed.
 
 import type { JSX } from 'react'
 import { Box, Chip, Stack, Typography } from '@mui/material'
 import { alpha } from '@mui/material/styles'
 import BoltIcon from '@mui/icons-material/Bolt'
-import ShieldMoonIcon from '@mui/icons-material/ShieldMoon'
-import { calloutFor, caveatsAt, surviveLine, type RankedRow, type StanceTargetRow } from './stanceRows'
+import { caveatsAt, surviveLine, type StanceTargetRow } from './stanceRows'
 
 /** Theme `success.main` / `warning.main` (theme.ts), as strings the bar fills can also use. */
 export const HOLD_COLOR = '#5fbf72'
 export const SURVIVE_COLOR = '#e0a94a'
-
-/** The small chips that ride the recommendation line: what you are wearing, what it costs. */
-function StanceTags({ s }: { s: RankedRow }): JSX.Element {
-  return (
-    <>
-      {s.current && (
-        <Chip
-          size="small"
-          color="primary"
-          label="worn now"
-          sx={{ height: 18, fontSize: 10, fontWeight: 700 }}
-          data-testid="stance-worn-now"
-        />
-      )}
-      {!s.current && <Chip size="small" variant="outlined" label="switch to it" sx={{ height: 18, fontSize: 10 }} />}
-      {s.free && <Chip size="small" variant="outlined" label="no upkeep" sx={{ height: 18, fontSize: 10 }} />}
-    </>
-  )
-}
-
-/**
- * THE RECOMMENDATION — `advice.sustained`, and the biggest thing on the card.
- *
- * The percentage is the large figure because it is the number that decides whether switching is
- * worth a global cooldown mid-fight, and it is phrased as damage TAKEN ("62% of the full hit")
- * rather than as a reduction: "50% reduction" and "takes 50%" are the same sentence for
- * Defensive's melee half and different sentences for everything else. The sentence under it is
- * where "full hit" is spelled out in full — "what it hits for before your stance".
- */
-export function Recommendation({ row }: { row: StanceTargetRow }): JSX.Element {
-  const c = calloutFor(row)
-  const tone = c.stance ? HOLD_COLOR : SURVIVE_COLOR
-  return (
-    <Box
-      data-testid="stance-recommendation"
-      data-stance={c.stance?.key ?? ''}
-      sx={{
-        px: 1.25,
-        py: 0.9,
-        borderRadius: 1.5,
-        border: '1px solid',
-        borderColor: alpha(tone, 0.5),
-        bgcolor: alpha(tone, 0.1),
-        borderLeft: `4px solid ${tone}`
-      }}
-    >
-      <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
-        <ShieldMoonIcon sx={{ fontSize: 18, color: tone }} />
-        <Typography variant="overline" sx={{ color: tone, fontWeight: 800, letterSpacing: 0.9, lineHeight: 1.4 }}>
-          {c.heading}
-        </Typography>
-        {c.stance && (
-          <Typography variant="h6" sx={{ fontWeight: 800, lineHeight: 1.1 }}>
-            {c.stance.name}
-          </Typography>
-        )}
-        {c.stance && <StanceTags s={c.stance} />}
-        <Box sx={{ flexGrow: 1 }} />
-        {c.stance && (
-          <Stack direction="row" spacing={0.6} alignItems="baseline">
-            <Typography variant="h5" sx={{ fontWeight: 800, color: tone, lineHeight: 1 }}>
-              {c.stance.percent}
-            </Typography>
-            <Typography variant="caption" color="text.secondary">
-              of the full hit
-            </Typography>
-          </Stack>
-        )}
-      </Stack>
-      <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.25 }}>
-        {c.detail}
-      </Typography>
-    </Box>
-  )
-}
 
 /**
  * SURVIVE MODE — `advice.emergency`, drawn so it can never be mistaken for the block above it.

@@ -69,6 +69,7 @@ import { ACTIVE_MS, SLOW_SAMPLE_CAP } from './encounter'
 import type { LogEvent } from '../../shared/logEvents'
 import type { RosterSnap, RosterView } from '../../shared/roster'
 import type { TargetProfile } from '../../shared/stanceAdvice'
+import type { OffenseProfile } from '../../shared/stanceOffense'
 import type {
   BladeCoatState,
   CombatSnapshot,
@@ -198,6 +199,19 @@ export class CombatEngine {
    */
   stanceTargets(): TargetProfile[] {
     return this.st.stanceLedger.targets()
+  }
+
+  /**
+   * THE OFFENSE LEDGER'S READ MODEL (stanceOffenseLedger.ts) — every (mob, zone, tier) YOU have
+   * damaged this session, with your damage split by the stance you were wearing.
+   *
+   * Beside `stanceTargets()` and through the same door, for the same reasons. The two lists are
+   * NOT the same set and must not be assumed to be: a mob that killed you without your landing a
+   * blow appears only in the first, and a mob you burned down untouched appears only in this one.
+   * They share the composite (mobKey, zoneBase, tier) key, which is how a surface pairs them.
+   */
+  stanceOffenseTargets(): OffenseProfile[] {
+    return this.st.stanceOffense.targets()
   }
 
   /** The stance in effect right now, lowercase, or null if none has been committed this

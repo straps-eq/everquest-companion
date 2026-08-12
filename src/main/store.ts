@@ -410,6 +410,10 @@ const DEFAULT_OVERLAY_CONFIG: Record<OverlayKind, OverlayConfig> = {
   // The HEALING pair (Task #59). Same knobs as the damage meters.
   'heal-fight': { open: false, locked: false, bgAlpha: 0.72, bounds: undefined, drill: null },
   'heal-overall': { open: false, locked: false, bgAlpha: 0.72, bounds: undefined, drill: null },
+  // The STANCE advisor. Same knobs as a meter — it is an ordinary window you go and get — and
+  // `drill` stays null forever: its rows are mobs, and a mob has no level to drill into here (the
+  // Stances tab is where the charts and the raw observations live).
+  stance: { open: false, locked: false, bgAlpha: 0.72, bounds: undefined, drill: null },
   // The CELEBRATION TOAST (docs/plans/celebration-toasts.md). `locked: true` is the resting
   // state that makes it a notifier rather than a window: locked = click-through, and the
   // overlay flips capture on only while a card is actually on screen. Unlocking is how you

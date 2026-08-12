@@ -4,6 +4,7 @@ import OverlayMeter from './OverlayMeter'
 import EventLogOverlay from './EventLogOverlay'
 import HealMeter from './HealMeter'
 import ToastOverlay from './ToastOverlay'
+import StanceOverlay from './StanceOverlay'
 import { isHealOverlayKind } from '@shared/types'
 
 // The overlay renders in its OWN transparent BrowserWindow (Task #52). It is a
@@ -17,12 +18,14 @@ import { isHealOverlayKind } from '@shared/types'
 //   'events'                          → the event log (alerts / notable loot / quests)
 //   'heal-fight' | 'heal-overall'     → the healing meter (Task #59)
 //   'toast'                           → the celebration strip (usually renders nothing)
+//   'stance'                          → the stance advisor (sustain + DPS, per mob)
 //   everything else                   → the damage meter (fight / zone selection lives inside)
 const kind = window.eqOverlay?.kind ?? 'fight'
 
 function Surface(): React.JSX.Element {
   if (kind === 'events') return <EventLogOverlay />
   if (kind === 'toast') return <ToastOverlay />
+  if (kind === 'stance') return <StanceOverlay />
   if (isHealOverlayKind(kind)) return <HealMeter />
   return <OverlayMeter />
 }

@@ -8,23 +8,37 @@
 // The panel decides nothing — every string, fraction and caveat on it was built by stanceRows.ts
 // out of the shared advice layer. What lives here is the ORDER, and the order is an argument:
 //
-//   1. the mismatch callout, when there is one — it is the only thing here that is urgent;
-//   2. the BANNER caveats — BEFORE the answer, deliberately. Too few hits measured, or classes
-//      with no wearable stance in them, is a reason to read what follows differently, and a
-//      reservation printed underneath the answer it qualifies is a reservation nobody reads
+//   1. THE TWO VERDICTS (StanceVerdictBlock.tsx) — sustain and damage, side by side, each naming
+//      the stance you are WEARING, the one that would be better, and the difference. This is the
+//      whole answer and it is first;
+//   2. the BANNER caveats — immediately under the answer they qualify. Too few hits measured, or
+//      classes with no wearable stance in them, is a reason to read the verdict differently
 //      (AGENTS.md's tooltip diet cuts the other way for exactly this class of statement: it is
 //      not source-caveating, it is the finding);
-//   3. the recommendation — `advice.sustained`, the stance you actually wear;
-//   4. survive mode — `advice.emergency`, deliberately separate and deliberately quieter;
-//   5. the stance comparison chart — the page's central claim, and now its real chart
-//      (StanceCharts.tsx). It kept the `stance-rank-row` testid the DOM bar list it replaced had;
-//   6. the damage mix, which is the evidence for 3 and 4, as a donut;
-//   7. what landed vs the full hit, which is the evidence for 6 (StanceRecoveryChart.tsx);
-//   8. the raw observations, collapsed.
+//   3. survive mode — `advice.emergency`, deliberately separate and deliberately quieter;
+//   4. the stance comparison chart — the sustain verdict's own picture (StanceCharts.tsx). It kept
+//      the `stance-rank-row` testid the DOM bar list it replaced had;
+//   5. the damage mix, which is the evidence for 1 and 3, as a donut;
+//   6. what landed vs the full hit, which is the evidence for 5 (StanceRecoveryChart.tsx);
+//   7. the raw observations, collapsed.
 //
-// 5 MOVED ABOVE 6. The ranking used to sit under the composition because it was a list; as the
-// chart it is the answer's own picture and belongs directly under the answer, with the two
-// evidence charts below the divider that separates "what to do" from "how we know".
+// ── WHAT 1 REPLACED, AND WHY ────────────────────────────────────────────────────────────────
+//
+// It used to open with a mismatch callout (when `detectMismatch` allowed one) followed by a
+// `Recommendation` block reading "Wear Defensive — you take 59% of the full hit". The owner's
+// report was that this is confusing, and it is: that block names ONE stance and no baseline, so
+// the comparison the player actually wants — against what he is wearing right now — existed only
+// inside a callout suppressed in four situations, including the commonest of all (being already in
+// the right stance, where the card said nothing at all). The verdict block states the comparison
+// unconditionally, including every case where the honest answer is that it cannot be made, and it
+// states the DAMAGE answer beside it because "which stance for sustain, which for DPS" is one
+// question with two halves.
+//
+// THE OLD TESTIDS ARE GONE, and that is safe rather than sloppy: `stance-recommendation` and
+// `stance-mismatch` were asserted by nothing — the e2e suite's only stance selectors are the
+// Overview's `stance-slot-N` class chips, and the unit suites test the row builders, not the DOM.
+// The new handles are `stance-verdict`, `stance-verdict-sustain`, `stance-verdict-dps` and
+// `stance-dps-cost`, plus `data-stance-mismatch` on the card for "is this the wrong stance".
 //
 // ── ON VOLUME ───────────────────────────────────────────────────────────────────────────────
 //
@@ -47,8 +61,9 @@ import { tierStyle } from '../../lib/tierChip'
 import { StanceComparisonChart } from './StanceCharts'
 import { RecoverySamplesChart } from './StanceRecoveryChart'
 import { DamageBreakdown, Observations } from './StanceEvidence'
-import { Recommendation, SURVIVE_COLOR, SurviveMode } from './StanceRecommendation'
-import { caveatsAt, mismatchLine, type StanceCaveat, type StanceTargetRow } from './stanceRows'
+import { SURVIVE_COLOR, SurviveMode } from './StanceRecommendation'
+import StanceVerdictBlock from './StanceVerdictBlock'
+import { caveatsAt, type StanceCaveat, type StanceTargetRow } from './stanceRows'
 
 /** Theme `secondary.main` (theme.ts) — the "there is no answer, here is why" blue. */
 const INFO_COLOR = '#6fb3d2'
@@ -147,25 +162,6 @@ function CorrectionLine({ row }: { row: StanceTargetRow }): JSX.Element {
   )
 }
 
-/** "You are in the wrong stance", the one urgent thing a card can say. */
-function MismatchCallout({ row }: { row: StanceTargetRow }): JSX.Element | null {
-  if (!row.mismatch) return null
-  return (
-    <Stack
-      direction="row"
-      spacing={0.75}
-      alignItems="center"
-      data-testid="stance-mismatch"
-      sx={{ px: 1.25, py: 0.6, borderRadius: 1.5, bgcolor: alpha(SURVIVE_COLOR, 0.22), border: `1px solid ${SURVIVE_COLOR}` }}
-    >
-      <WarningAmberIcon sx={{ fontSize: 17, color: SURVIVE_COLOR, flexShrink: 0 }} />
-      <Typography variant="caption" sx={{ fontWeight: 600 }}>
-        {mismatchLine(row.mismatch)}
-      </Typography>
-    </Stack>
-  )
-}
-
 export default function StanceTargetCard({ row }: { row: StanceTargetRow }): JSX.Element {
   return (
     <Paper
@@ -176,12 +172,15 @@ export default function StanceTargetCard({ row }: { row: StanceTargetRow }): JSX
         transition: 'border-color 120ms'
       }}
       data-testid="stance-target-card"
+      // The card still ANNOUNCES a measurable wrong stance — the verdict block says it in words and
+      // the border says it at a glance — so a selector looking for the old callout still lands on
+      // the card that has one.
+      data-stance-mismatch={row.mismatch ? 'true' : 'false'}
     >
       <Stack spacing={0.85}>
         <CardHeader row={row} />
-        <MismatchCallout row={row} />
+        <StanceVerdictBlock row={row} />
         <CaveatBanners caveats={row.caveats} />
-        <Recommendation row={row} />
         <SurviveMode row={row} />
         <StanceComparisonChart row={row} />
         <Divider flexItem sx={{ opacity: 0.5 }} />

@@ -38,6 +38,9 @@ export function registerStanceAdviceIpc(): void {
     IPC.getStanceAdvice,
     (): StanceAdvicePayload => ({
       targets: combat.stanceTargets(),
+      // Read in the same tick as the line above, which is the whole reason these four facts share
+      // one channel: the sustain answer and the DPS answer are two readings of ONE instant.
+      offense: combat.stanceOffenseTargets(),
       currentStance: combat.currentStanceKey(),
       availableStances: stancesForCurrentLoadout()
     })

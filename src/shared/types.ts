@@ -25,11 +25,19 @@ export type { LootDisposition, ItemStatBlock }
  *   - 'toast' (docs/plans/celebration-toasts.md): the CELEBRATION strip — normally renders
  *                 nothing; a boss kill or a Sky quest completion animates a card in, holds, and
  *                 leaves. Not a meter: it has no selector, no drill and no scope.
+ *   - 'stance'  : the STANCE advisor — per mob you are fighting, the stance that takes the least
+ *                 damage and the stance that deals the most, with what the second one costs.
+ *                 Not a meter either: it reads `combat:stanceAdvice` rather than the combat
+ *                 snapshot, has no selector and no drill, and its rows are MOBS rather than
+ *                 damage sources. The owner asked for it in the same breath as the tab's clarity
+ *                 fix — the answer is worthless on a tab you are not looking at mid-fight.
  * Each kind has its own independently-persisted OverlayConfig (bounds/alpha/lock/text size/drill)
  * and can be open simultaneously. IPC channels + the store are keyed by this.
  */
-export type OverlayKind = 'fight' | 'overall' | 'events' | 'heal-fight' | 'heal-overall' | 'toast'
-export const OVERLAY_KINDS: OverlayKind[] = ['fight', 'overall', 'events', 'heal-fight', 'heal-overall', 'toast']
+export type OverlayKind = 'fight' | 'overall' | 'events' | 'heal-fight' | 'heal-overall' | 'toast' | 'stance'
+// One line on purpose: this file sits at its 400-line factoring ceiling, and a nine-line array
+// literal spends eight of them on punctuation.
+export const OVERLAY_KINDS: OverlayKind[] = ['fight', 'overall', 'events', 'heal-fight', 'heal-overall', 'toast', 'stance']
 
 /** True for the two HEALING overlay kinds (they render HealMeter, not OverlayMeter). */
 export function isHealOverlayKind(kind: OverlayKind): boolean {
